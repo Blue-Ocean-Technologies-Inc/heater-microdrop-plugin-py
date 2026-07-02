@@ -1,0 +1,21 @@
+schema_version = 1
+name = "heater"
+label = "Heater"
+version = "1.0.0"
+packages = ["heater_controller", "heater_controls_ui", "heater_protocol_controls"]
+
+[[groups]]
+name = "heater_ui"
+label = "Heater UI (status/controls and plotting dock-pane + protocol column + statusbar icon)"
+plugins = [
+    "heater_controls_ui.plugin:HeaterControlsUiPlugin",
+    "heater_protocol_controls.plugin:HeaterProtocolControlsPlugin",
+]
+enabled_key = "plugin_group_enabled.heater_ui"
+
+[[groups]]
+name = "heater_backend"
+label = "Heater backend (board driver)"
+plugins = ["heater_controller.plugin:HeaterControllerPlugin"]
+enabled_key = "plugin_group_enabled.heater_backend"
+post_enable_publish_topic = "Heater/requests/start_device_monitoring"

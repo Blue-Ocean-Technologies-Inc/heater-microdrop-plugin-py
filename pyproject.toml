@@ -1,0 +1,45 @@
+[project]
+name = "heater-microdrop-plugin"
+version = "1.0.0"
+description = "MicroDrop heater plugin: board driver, status/controls + plotting UI, and protocol column"
+requires-python = ">=3.11"
+dependencies = [
+    "pyserial>=3.5",
+    "matplotlib>=3.8",
+    "pydantic>=2",
+    "mpremote>=1.20",
+]
+
+# Discovered by MicroDrop's plugin manager: the entry point anchors the
+# distribution; the microdrop_plugin.toml manifest (shipped as package data of
+# the anchor via force-include) declares the toggleable plugin groups.
+[project.entry-points."microdrop.plugins"]
+heater = "heater_controller"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["heater_controller", "heater_controls_ui", "heater_protocol_controls"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"microdrop_plugin.toml" = "heater_controller/microdrop_plugin.toml"
+
+[tool.pixi.package]
+name = "heater-microdrop-plugin"
+version = "1.0.0"
+
+[tool.pixi.package.build.backend]
+name = "pixi-build-python"
+version = "0.*"
+channels = ["https://prefix.dev/conda-forge"]
+
+[tool.pixi.package.host-dependencies]
+hatchling = "*"
+
+[tool.pixi.package.run-dependencies]
+pyserial = ">=3.5"
+matplotlib = ">=3.8"
+pydantic = ">=2"
+mpremote = ">=1.20"
