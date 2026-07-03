@@ -18,4 +18,3 @@ name = "heater_backend"
 label = "Heater backend (board driver)"
 plugins = ["heater_controller.plugin:HeaterControllerPlugin"]
 enabled_key = "plugin_group_enabled.heater_backend"
-post_enable_publish_topic = "Heater/requests/start_device_monitoring"
