@@ -71,9 +71,14 @@ jobs:
             pyproject.toml microdrop_plugin.toml
           grep -n '^version' pyproject.toml microdrop_plugin.toml
 
-      - name: Build + publish
+      - name: Authenticate with prefix.dev
+        # pixi publish reads credentials from the auth store (not the
+        # PREFIX_API_KEY env var, which only `pixi upload prefix` honors).
         env:
           PREFIX_API_KEY: ${{ secrets.PREFIX_API_KEY }}
+        run: pixi auth login --token "$PREFIX_API_KEY" https://prefix.dev
+
+      - name: Build + publish
         run: pixi publish --target-channel https://prefix.dev/microdrop-plugins
 
       - name: Commit release + tag
