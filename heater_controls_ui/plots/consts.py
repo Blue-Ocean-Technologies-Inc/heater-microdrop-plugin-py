@@ -32,6 +32,16 @@ RESUME_PLOT_TOOLTIP = ("Resume the plot. Sampling and redraws pick back up "
 STOP_PLOT_TOOLTIP = ("Stop plotting entirely and discard the history. "
                      "Use this if the plot slows the application down.")
 
+# Clear-plot button (momentary, not checkable). No suitable ICON_* exists in
+# microdrop_style.icons.icons for a "clear/sweep" glyph, so this is a Material
+# Symbols ligature name literal — same string-glyph style as ICON_PLAY /
+# ICON_PAUSE / ICON_RESUME — rendered through ICON_FONT_FAMILY.
+CLEAR_PLOT_ICON = "delete_sweep"
+CLEAR_PLOT_TOOLTIP = ("Clear the plotted history and recalibrate the axes to "
+                     "recent values. Telemetry keeps arriving in the "
+                     "background - this only resets the view, it does not "
+                     "pause or stop plotting.")
+
 # Categorical palette for per-sensor temperature lines — brand colours ordered
 # for high adjacent contrast, cycled when there are more sensors than colours.
 SENSOR_PALETTE = (

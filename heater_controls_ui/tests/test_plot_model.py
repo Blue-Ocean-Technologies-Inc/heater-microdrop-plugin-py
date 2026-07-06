@@ -97,6 +97,53 @@ def test_run_state_defaults():
     assert m.hidden_series == set()
 
 
+def test_request_clear_bumps_counter_without_touching_buffers():
+    """request_clear() only flags the request (a monotonic counter the
+    canvas drains on its next tick) — it must not itself clear buffers,
+    otherwise a paused canvas (which never ticks) could never see the
+    pre-clear data it's still displaying."""
+    m = HeaterPlotModel()
+    m.apply({"temperatures": {"inlet": 25.0}})
+    m.sample(now=0.0)
+    before = m.clear_requested
+    m.request_clear()
+    assert m.clear_requested == before + 1
+    times, sensors, _pids, _pwms = m.snapshot()
+    assert times == [0.0]
+    assert sensors["inlet"] == [25.0]
+
+
+def test_request_clear_is_monotonic_across_repeated_requests():
+    m = HeaterPlotModel()
+    assert m.clear_requested == 0
+    m.request_clear()
+    m.request_clear()
+    assert m.clear_requested == 2
+
+
+def test_draining_a_clear_request_recalibrates_to_post_clear_telemetry():
+    """Simulates the canvas's tick-time drain: it notices clear_requested
+    moved and calls clear() (the same purge Stop uses), but — unlike Stop —
+    telemetry keeps arriving afterwards and sampling picks back up, so the
+    next snapshot reflects only recent (post-clear) values."""
+    m = HeaterPlotModel()
+    m.apply({"temperatures": {"inlet": 99.0}})   # an old extreme value
+    m.sample(now=0.0)
+    m.request_clear()
+
+    # What the canvas does once it observes clear_requested has moved.
+    m.clear()
+
+    assert m.snapshot() == ([], {}, {}, {})
+    assert m.enabled is True                      # plotting stays live
+
+    # Telemetry keeps arriving in the background after the clear.
+    m.apply({"temperatures": {"inlet": 40.0}})
+    m.sample(now=1.0)
+    _times, sensors, _pids, _pwms = m.snapshot()
+    assert sensors["inlet"] == [40.0]             # no trace of the old extreme
+
+
 def test_rolling_window_caps_history():
     m = HeaterPlotModel()
     m.apply({"temperatures": {"inlet": 25.0}})

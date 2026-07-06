@@ -16,6 +16,11 @@ The plot's run state also lives here so the view stays dumb:
 * ``hidden_series`` — role-prefixed keys the user toggled off via the legend.
 * ``revision`` — bumped whenever the drawable buffers change, so the canvas
   can skip redraws when nothing moved.
+* ``clear_requested`` — bumped by the view (:meth:`request_clear`) to ask for
+  a view-only purge of the buffered/plotted points. Telemetry keeps arriving
+  and nothing upstream is touched; the canvas drains the request on its next
+  tick by calling :meth:`clear`, which also bumps ``revision`` so the
+  following redraw autoscales the axes to whatever data has arrived since.
 """
 import threading
 
@@ -41,6 +46,9 @@ class HeaterPlotModel(HasTraits):
                              "hidden from the plot via the legend.")
     revision = Int(0, desc="Bumped whenever the drawable buffers change; the "
                            "canvas redraws only when this moves.")
+    clear_requested = Int(0, desc="Bumped by the view to request a view-only "
+                                  "purge of the buffered/plotted points; "
+                                  "drained by the canvas on its next tick.")
 
     # ------------------------------------------------------------------ #
     # Buffers (all access under _lock)                                     #
@@ -111,6 +119,13 @@ class HeaterPlotModel(HasTraits):
             self._pwm_series.clear()
             self._setpoint_series.clear()
             self.revision += 1
+
+    def request_clear(self):
+        """View-only purge request (e.g. the Clear-plot toolbar button):
+        bump ``clear_requested`` so the canvas drains it on its next tick and
+        calls :meth:`clear`. Unlike ``enabled = False``, telemetry keeps
+        arriving in the background — only the plotted window resets."""
+        self.clear_requested += 1
 
     @observe("enabled")
     def _enabled_updated(self, event):
