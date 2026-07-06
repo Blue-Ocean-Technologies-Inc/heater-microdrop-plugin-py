@@ -1,3 +1,15 @@
+## v1.2.0 (2026-07-06)
+
+### Feat
+
+- **plots**: stop button shows play icon + start tooltip while stopped
+- **plots**: view-only clear button recalibrates axes
+- **plots**: pause button shows resume icon while paused
+
+### Fix
+
+- **plots**: disable clear while paused/stopped; polish tooltips + tests
+
 ## v1.1.1 (2026-07-06)
 
 ### Fix
