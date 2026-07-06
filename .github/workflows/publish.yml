@@ -1,12 +1,17 @@
 name: Publish to prefix.dev
 
 # Builds the conda package (pixi-build, noarch python) and publishes it to
-# https://prefix.dev/microdrop-plugins on every push to main that touches
-# shipped files. Versioning is automatic: next version = latest v* tag with
-# the patch bumped; run the workflow manually with an explicit version for
-# minor/major releases. After a successful publish the stamped version is
-# committed back ([skip ci]) and tagged, so the repo always reflects the
-# channel.
+# https://prefix.dev/microdrop-plugins on every push to main that contains
+# release-worthy conventional commits. commitizen derives the bump from the
+# commit messages since the last v* tag (fix/refactor/perf -> patch,
+# feat -> minor, BREAKING CHANGE / ! -> major), stamps pyproject.toml +
+# microdrop_plugin.toml (see [tool.commitizen] version_files), and maintains
+# CHANGELOG.md. Pushes with nothing release-worthy (docs/ci/chore or
+# non-conventional messages) skip publishing cleanly.
+#
+# The release commit + tag are pushed only after a successful publish, so
+# the repo always reflects the channel. For a forced or explicit release,
+# run the workflow manually with a version input.
 #
 # Auth: set the PREFIX_API_KEY repository secret (prefix.dev API key).
 # Alternative (no stored secret): configure trusted publishing for this repo
@@ -17,12 +22,13 @@ on:
     branches: [main]
     paths-ignore:
       - "README.md"
+      - "CHANGELOG.md"
       - "demos/**"
       - ".github/**"
   workflow_dispatch:
     inputs:
       version:
-        description: "Explicit version (X.Y.Z); empty = patch-bump latest v* tag"
+        description: "Explicit version (X.Y.Z); empty = derive from conventional commits"
         required: false
         default: ""
 
@@ -39,39 +45,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history: version is computed from v* tags
+          fetch-depth: 0   # commitizen reads the commit history + v* tags
 
       - uses: prefix-dev/setup-pixi@v0.8.0
         with:
           pixi-version: v0.71.2
           run-install: false
 
-      - name: Compute version
-        id: ver
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            NEW="${{ github.event.inputs.version }}"
-          else
-            LAST=$(git tag --list 'v*' --sort=-v:refname | head -n1)
-            LAST=${LAST#v}
-            LAST=${LAST:-1.0.0}
-            IFS=. read -r MA MI PA <<< "$LAST"
-            NEW="$MA.$MI.$((PA+1))"
-          fi
-          echo "version=$NEW" >> "$GITHUB_OUTPUT"
-          echo "Publishing version $NEW"
+      - name: Install commitizen
+        run: pipx install "commitizen>=4,<5"
 
-      - name: Stamp version into pyproject.toml + microdrop_plugin.toml
-        # Matches only bare X.Y.Z version lines: [project] and
-        # [tool.pixi.package] in pyproject.toml plus the manifest version.
-        # The build-backend's version = "0.*" line does not match.
+      - name: Bump version + changelog (commitizen)
+        id: bump
+        # Exit codes verified against cz 4.16: 3 = no commits since the
+        # last tag, 21 = commits exist but none are release-worthy — both
+        # mean "nothing to publish", not failure.
         run: |
-          V="${{ steps.ver.outputs.version }}"
-          sed -i -E "s/^version = \"[0-9]+\.[0-9]+\.[0-9]+\"\$/version = \"$V\"/" \
-            pyproject.toml microdrop_plugin.toml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          set +e
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            cz bump --yes "${{ github.event.inputs.version }}"
+          else
+            cz bump --yes
+          fi
+          rc=$?
+          set -e
+          if [ "$rc" -eq 3 ] || [ "$rc" -eq 21 ]; then
+            echo "No release-worthy commits since the last tag; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
           grep -n '^version' pyproject.toml microdrop_plugin.toml
 
       - name: Authenticate with prefix.dev
+        if: steps.bump.outputs.skip != 'true'
         # pixi publish reads credentials from the auth store (not the
         # PREFIX_API_KEY env var, which only `pixi upload prefix` honors).
         env:
@@ -79,15 +89,12 @@ jobs:
         run: pixi auth login --token "$PREFIX_API_KEY" https://prefix.dev
 
       - name: Build + publish
+        if: steps.bump.outputs.skip != 'true'
         run: pixi publish --target-channel https://prefix.dev/microdrop-plugins
 
-      - name: Commit release + tag
-        # Only after a successful publish, so the repo never claims a version
-        # the channel doesn't have. [skip ci] prevents a publish loop.
-        run: |
-          V="${{ steps.ver.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore: release v$V [skip ci]"
-          git tag "v$V"
-          git push origin "HEAD:${GITHUB_REF_NAME:-main}" --tags
+      - name: Push release commit + tag
+        if: steps.bump.outputs.skip != 'true'
+        # Only after a successful publish, so the repo never claims a
+        # version the channel doesn't have. The [skip ci] in bump_message
+        # prevents a publish loop.
+        run: git push origin "HEAD:${GITHUB_REF_NAME:-main}" --tags
