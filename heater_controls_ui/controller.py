@@ -10,7 +10,7 @@ from microdrop_utils.traitsui_qt_helpers import stretch_group_layouts_horizontal
 from logger.logger_service import get_logger
 
 from heater_controller.consts import (
-    SET_TEMPERATURE, SET_PWM, SET_PID_MODE, SET_STREAM, ALL_OFF,
+    SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,
 )
 
 logger = get_logger(__name__)
@@ -76,21 +76,28 @@ class HeaterControlsController(BaseStatusController):
                 readout.pwm_display = f"{value} %"
                 return
 
-    def _apply_mode(self):
-        """Drive the board's active setpoint to the current mode's state. Called
-        only while streaming is on (the master gate).
-
-        Temp publishes the temperature setpoint ONLY while PID is on:
-        ``pid_<heater>_<temp>`` is itself the board's "start PID" command
-        (there is no separate live enable), so sending it with the toggle off
-        would engage PID against the UI. With PID off a Temp-mode setpoint
-        stays staged. PWM publishes the open-loop duty."""
-        if self.model.mode == "Temp":
-            if self.model.pid_enabled:
-                self._publish(SET_TEMPERATURE, self._heater_payload(temperature=self.model.temperature))
-        else:
-            self._publish(SET_PWM, self._heater_payload(pwm=self.model.pwm))
+    # ------------------------------------------------------------------ #
+    # Run-mode transitions — ports of the legacy standalone UI's slots.    #
+    # Each transition is ONE published request; the backend executes the   #
+    # legacy stop -> delay -> start serial sequence atomically (separate   #
+    # pub/sub messages have no ordering guarantee across the worker pool). #
+    # ------------------------------------------------------------------ #
+    def start_stream(self):
+        """Legacy start_stream(): (re)start the board in the mode the UI shows —
+        PID toward the temperature setpoint, or plain telemetry streaming with
+        the open-loop duty re-asserted when in PWM mode."""
+        payload = self._heater_payload(pid=self.model.pid_enabled)
+        if self.model.pid_enabled:
+            payload["temperature"] = self.model.temperature
+        elif self.model.mode == "PWM":
+            payload["pwm"] = self.model.pwm
             self._echo_commanded_pwm(self.model.pwm)
+        self._publish(START_STREAM, payload)
+
+    def stop_stream(self):
+        """Legacy stop_stream(), plus all_off so nothing keeps heating while
+        streaming is off."""
+        self._publish(STOP_STREAM, self._heater_payload(all_off=True))
 
     # ------------------------------------------------------------------ #
     # Observers → published commands                                       #
@@ -129,67 +136,40 @@ class HeaterControlsController(BaseStatusController):
 
     @observe("model:mode")
     def _on_mode_changed(self, event):
-        # PID-on forces Temp mode (set by _on_pid_enabled_changed / the board
-        # sync; the view also locks the mode toggle), so a user mode switch
-        # only ever happens with PID off. Both modes then run on the board's
-        # plain telemetry stream — no board task transition is needed, just
-        # drive the new mode's setpoint. While stream is off the mode is
-        # staged (applied by _apply_mode when streaming starts).
+        # PID-on forces Temp mode (the view also locks the toggle), so a user
+        # mode switch only ever happens with PID off — both modes then run on
+        # the board's plain telemetry stream, no task transition needed.
+        # Switching to PWM drives the staged duty; switching to Temp stages
+        # the setpoint (it only reaches the board when PID is enabled).
         if self.model.updating_from_board or self.model.pid_enabled:
             return
-        if self.model.stream_active:
-            self._apply_mode()
-            logger.info(f"Heater UI: Mode --> {event.new}")
+        if self.model.stream_active and event.new == "PWM":
+            self._publish(SET_PWM, self._heater_payload(pwm=self.model.pwm))
+            self._echo_commanded_pwm(self.model.pwm)
+            logger.info("Heater UI: Mode --> PWM (manual duty)")
 
     @observe("model:pid_enabled")
     def _on_pid_enabled_changed(self, event):
-        """The PID on/off toggle.
-
-        The board has no live enable/disable: PID mode is ENTERED by sending a
-        temperature setpoint (``pid_<heater>_<temp>`` starts the PID-coupled
-        stream task) and LEFT via ``pid_<heater>_stop`` followed by restarting
-        the plain telemetry stream — the same stop-current/start-other
-        sequence the legacy standalone UI used (its start_stream). A flip
-        while the stream is off is staged and applied on stream start."""
+        """Legacy on_pid_toggled(): while streaming, restart the stream in the
+        new mode (the backend runs the stop -> delay -> start sequence);
+        otherwise the flip is staged for the next stream start."""
         if self.model.updating_from_board:
             return                      # board-reported state, not a user flip
         if event.new:
             # PID owns the temperature loop: force Temp mode. The mode
             # observer skips publishing while pid_enabled is on.
             self.model.mode = "Temp"
-        if not self.model.stream_active:
-            logger.info(f"Heater UI: PID control {'on' if event.new else 'off'} staged (stream off)")
-            return
-        if event.new:
-            # Stop the plain stream, then start PID via the setpoint command
-            # (which brings its own PID-coupled stream).
-            self._publish(SET_STREAM, {"group": "stop"})
-            self._publish(SET_TEMPERATURE, self._heater_payload(temperature=self.model.temperature))
-            logger.info("Heater UI: PID control --> enabled (Temp mode, closed-loop)")
+        if self.model.stream_active:
+            logger.info(f"Heater UI: PID {'enabled' if event.new else 'disabled'}, restarting stream")
+            self.start_stream()
         else:
-            # Stop PID, then resume the plain stream so telemetry continues
-            # and manual PWM takes effect again (in PWM mode).
-            self._publish(SET_PID_MODE, self._heater_payload(mode="stop"))
-            self._publish(SET_STREAM, {"group": "all"})
-            logger.info("Heater UI: PID control --> disabled (manual PWM available in PWM mode)")
+            logger.info(f"Heater UI: PID {'enabled' if event.new else 'disabled'} (applies on next stream start)")
 
     @observe("model:stream_active")
     def _on_stream_active_changed(self, event):
+        if self.model.updating_from_board:
+            return
         if event.new:
-            # Match the legacy UI's start_stream: with PID on, the temperature
-            # setpoint command itself starts the PID-coupled stream; otherwise
-            # start the plain telemetry stream and drive the current mode.
-            if self.model.pid_enabled:
-                self._publish(SET_TEMPERATURE, self._heater_payload(temperature=self.model.temperature))
-            else:
-                self._publish(SET_STREAM, {"group": "all"})
-                self._apply_mode()
-            logger.info("Heater UI: Stream on request sent...")
+            self.start_stream()
         else:
-            # Master-gate off: stop PID if it is running (the board will
-            # answer with §INFO pid_stopped, which syncs the toggle off),
-            # idle the board, and stop telemetry.
-            if self.model.pid_enabled:
-                self._publish(SET_PID_MODE, self._heater_payload(mode="stop"))
-            self._publish(ALL_OFF, {})
-            self._publish(SET_STREAM, {"group": "stop"})
+            self.stop_stream()
