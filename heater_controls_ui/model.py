@@ -63,6 +63,11 @@ class HeaterStatusModel(BaseStatusModel):
     # the backend's PID auto-drives the duty toward the temperature setpoint.
     # Temp first → the default (closed-loop PID) when the pane first opens.
     mode = Enum("Temp", "PWM", desc="Open-loop PWM duty vs closed-loop temperature (PID)")
+    # Dedicated PID on/off toggle, decoupled from `mode`: `mode` only selects which
+    # setpoint (temperature vs PWM) is applied; this trait controls whether the
+    # backend's closed-loop PID is engaged. Defaults to True so the legacy
+    # Temp-mode behavior (PID on) is the out-of-the-box experience.
+    pid_enabled = Bool(True, desc="Backend closed-loop PID control engaged")
     # Master gate: while off, nothing streams from the board and we send it no
     # setpoint commands (edits are staged and applied when streaming starts).
     stream_active = Bool(False, desc="Telemetry streaming active")
