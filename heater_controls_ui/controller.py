@@ -77,16 +77,21 @@ class HeaterControlsController(BaseStatusController):
                 return
 
     def _apply_mode(self):
-        """Drive the board to the current mode's state. Called only while
-        streaming is on (the master gate). Temp runs closed-loop PID toward the
-        temperature setpoint; PWM disables PID and drives the open-loop duty."""
+        """Drive the board's active setpoint to the current mode's state. Called
+        only while streaming is on (the master gate). Temp publishes the
+        temperature setpoint; PWM publishes the open-loop duty. PID enable/disable
+        is independent of mode — see `_apply_pid_mode`."""
         if self.model.mode == "Temp":
-            self._publish(SET_PID_MODE, self._heater_payload(mode="enable"))
             self._publish(SET_TEMPERATURE, self._heater_payload(temperature=self.model.temperature))
         else:
-            self._publish(SET_PID_MODE, self._heater_payload(mode="disable"))
             self._publish(SET_PWM, self._heater_payload(pwm=self.model.pwm))
             self._echo_commanded_pwm(self.model.pwm)
+
+    def _apply_pid_mode(self):
+        """Drive the board's PID enable/disable to match the current `pid_enabled`
+        toggle. Called only while streaming is on (the master gate), same as
+        `_apply_mode` — decoupled from `mode` so PWM-mode + PID-on is allowed."""
+        self._publish(SET_PID_MODE, self._heater_payload(mode="enable" if self.model.pid_enabled else "disable"))
 
     # ------------------------------------------------------------------ #
     # Observers → published commands                                       #
@@ -126,11 +131,23 @@ class HeaterControlsController(BaseStatusController):
             self._apply_mode()
             logger.debug(f"Mode → {event.new}")
 
+    @observe("model:pid_enabled")
+    def _on_pid_enabled_changed(self, event):
+        # Dedicated PID on/off toggle, decoupled from mode: flipping it re-asserts
+        # PID enable/disable only, but only while streaming (the master gate).
+        # While stream is off the toggle is staged (applied by _apply_pid_mode
+        # when streaming starts).
+        if self.model.stream_active:
+            self._apply_pid_mode()
+            logger.debug(f"PID control → {'enabled' if event.new else 'disabled'}")
+
     @observe("model:stream_active")
     def _on_stream_active_changed(self, event):
         if event.new:
-            # Start telemetry, then drive the board to the UI's current state.
+            # Start telemetry, then drive the board to the UI's current state:
+            # the current PID on/off toggle and the current mode's setpoint.
             self._publish(SET_STREAM, {"group": "all"})
+            self._apply_pid_mode()
             self._apply_mode()
         else:
             # Master-gate off: idle the board and stop telemetry, so nothing is
