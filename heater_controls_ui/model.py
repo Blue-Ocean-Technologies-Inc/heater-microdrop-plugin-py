@@ -63,6 +63,12 @@ class HeaterStatusModel(BaseStatusModel):
     # the backend's PID auto-drives the duty toward the temperature setpoint.
     # Temp first → the default (closed-loop PID) when the pane first opens.
     mode = Enum("Temp", "PWM", desc="Open-loop PWM duty vs closed-loop temperature (PID)")
+    # Sensor group used for streaming and PID input, matching the legacy UI's
+    # dropdown: "all" streams/regulates on every sensor (the default), the
+    # named groups restrict to that bus, and "None" omits the group suffix so
+    # the board falls back to its default sensor.
+    sensor_group = Enum("all", "thermistors", "onewire", "None",
+                        desc="Sensor group for streaming/PID (None = board default)")
     # Dedicated PID on/off toggle. PID on implies Temp mode (the controller
     # forces it and the view locks the mode toggle): the board enters PID by
     # receiving a temperature setpoint and leaves it via pid_stop + a plain

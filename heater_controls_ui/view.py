@@ -54,6 +54,11 @@ control_group = VGroup(
         editor=EnumEditor(name="object.available_heaters"),
     ),
     Item(
+        "sensor_group",
+        label="Sensors",
+        enabled_when="connected and not halted",
+    ),
+    Item(
         "temperature",
         label="Set temperature",
         enabled_when="connected and not halted and mode == 'Temp'",

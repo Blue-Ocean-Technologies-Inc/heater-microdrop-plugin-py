@@ -55,8 +55,8 @@ def test_stream_start_with_pid_on_requests_pid_start(published):
     model.pid_enabled = True
 
     model.stream_active = True
-    assert published == [
-        (START_STREAM, {"pid": True, "temperature": model.temperature})]
+    assert published == [(START_STREAM, {
+        "pid": True, "temperature": model.temperature, "sensor_group": "all"})]
 
 
 def test_stream_start_in_pwm_mode_carries_the_duty(published):
@@ -64,7 +64,8 @@ def test_stream_start_in_pwm_mode_carries_the_duty(published):
     model.mode = "PWM"
 
     model.stream_active = True
-    assert published == [(START_STREAM, {"pid": False, "pwm": model.pwm})]
+    assert published == [(START_STREAM, {
+        "pid": False, "pwm": model.pwm, "sensor_group": "all"})]
 
 
 def test_stream_stop_is_one_request_with_all_off(published):
@@ -85,12 +86,12 @@ def test_pid_toggle_while_streaming_restarts_stream(published):
 
     model.pid_enabled = True
     assert model.mode == "Temp"
-    assert published == [
-        (START_STREAM, {"pid": True, "temperature": model.temperature})]
+    assert published == [(START_STREAM, {
+        "pid": True, "temperature": model.temperature, "sensor_group": "all"})]
 
     published.clear()
     model.pid_enabled = False
-    assert published == [(START_STREAM, {"pid": False})]
+    assert published == [(START_STREAM, {"pid": False, "sensor_group": "all"})]
 
 
 def test_manual_pwm_applies_live_after_pid_off_and_mode_switch(published):
@@ -121,7 +122,7 @@ def test_temperature_publishes_only_with_pid_on(published):
     model.pid_enabled = True
     published.clear()
     model.temperature = 45               # PID on: published live
-    assert (SET_TEMPERATURE, {"temperature": 45}) in published
+    assert (SET_TEMPERATURE, {"temperature": 45, "sensor_group": "all"}) in published
 
 
 # --- board-reported state (telemetry sync) ----------------------------------------
@@ -140,4 +141,26 @@ def test_board_sync_does_not_republish(published):
     assert published == []               # echo guard: no command loop
 
     model.temperature = 50               # subsequent USER edits still publish
-    assert (SET_TEMPERATURE, {"temperature": 50}) in published
+    assert (SET_TEMPERATURE, {"temperature": 50, "sensor_group": "all"}) in published
+
+
+# --- sensor group (legacy dropdown) -------------------------------------------
+
+def test_sensor_group_defaults_all():
+    assert HeaterStatusModel().sensor_group == "all"
+
+
+def test_sensor_group_change_while_streaming_restarts(published):
+    controller, model = _controller()
+    model.stream_active = True
+    published.clear()
+
+    model.sensor_group = "thermistors"
+    assert published == [(START_STREAM, {"pid": False, "sensor_group": "thermistors"})]
+
+
+def test_sensor_group_none_omits_suffix(published):
+    controller, model = _controller()
+    model.sensor_group = "None"
+    model.stream_active = True
+    assert published == [(START_STREAM, {"pid": False})]

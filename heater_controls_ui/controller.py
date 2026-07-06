@@ -64,6 +64,15 @@ class HeaterControlsController(BaseStatusController):
             payload["heater"] = self.model.selected_heater
         return payload
 
+    def _group_payload(self, **extra):
+        """_heater_payload plus the sensor group, matching the legacy UI's
+        combo semantics: "None" omits the group suffix entirely (board default
+        sensor); anything else — including "all" — is sent as the suffix."""
+        payload = self._heater_payload(**extra)
+        if self.model.sensor_group != "None":
+            payload["sensor_group"] = self.model.sensor_group
+        return payload
+
     @staticmethod
     def _publish(topic, payload):
         publish_message(message=json.dumps(payload), topic=topic)
@@ -85,8 +94,9 @@ class HeaterControlsController(BaseStatusController):
     def start_stream(self):
         """Legacy start_stream(): (re)start the board in the mode the UI shows —
         PID toward the temperature setpoint, or plain telemetry streaming with
-        the open-loop duty re-asserted when in PWM mode."""
-        payload = self._heater_payload(pid=self.model.pid_enabled)
+        the open-loop duty re-asserted when in PWM mode. The sensor group rides
+        along (PID input selection / which sensors stream)."""
+        payload = self._group_payload(pid=self.model.pid_enabled)
         if self.model.pid_enabled:
             payload["temperature"] = self.model.temperature
         elif self.model.mode == "PWM":
@@ -111,7 +121,9 @@ class HeaterControlsController(BaseStatusController):
             logger.debug("Heater in PWM mode. Temperature cannot be changed.")
             return
         if self.model.stream_active and self.model.pid_enabled:
-            self._publish(SET_TEMPERATURE, self._heater_payload(temperature=event.new))
+            # Legacy on_setpoint_changed: the live setpoint command carries the
+            # sensor group too (pid_<h>_<t>[_<group>]).
+            self._publish(SET_TEMPERATURE, self._group_payload(temperature=event.new))
             logger.debug(f"Temperature --> {event.new} °C")
         else:
             logger.debug(f"Temperature setpoint {event.new} °C staged (stream off or pid mode disabled)")
@@ -147,6 +159,16 @@ class HeaterControlsController(BaseStatusController):
             self._publish(SET_PWM, self._heater_payload(pwm=self.model.pwm))
             self._echo_commanded_pwm(self.model.pwm)
             logger.info("Heater UI: Mode --> PWM (manual duty)")
+
+    @observe("model:sensor_group")
+    def _on_sensor_group_changed(self, event):
+        """Legacy on_sensor_group_changed(): while streaming, restart the
+        stream with the new group; otherwise it applies on the next start."""
+        if self.model.updating_from_board:
+            return
+        if self.model.stream_active:
+            logger.info(f"Heater UI: sensor group --> {event.new}, restarting stream")
+            self.start_stream()
 
     @observe("model:pid_enabled")
     def _on_pid_enabled_changed(self, event):
