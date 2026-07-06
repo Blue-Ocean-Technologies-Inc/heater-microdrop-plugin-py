@@ -1,3 +1,9 @@
+## v1.1.1 (2026-07-06)
+
+### Fix
+
+- **ui**: drop the redundant side label on the PID toggle
+
 ## v1.1.0 (2026-07-06)
 
 ### Feat
