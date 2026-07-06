@@ -6,7 +6,7 @@ from traitsui.api import (
 from traitsui.item import UReadonly
 
 from manual_controls.MVC import ToggleEditorFactory
-from microdrop_style.colors import INFO_COLOR
+from microdrop_style.colors import INFO_COLOR, SUCCESS_COLOR
 from microdrop_utils.traitsui_qt_helpers import ToggleEditor, IconToggleEditor
 
 # Every section is collapsible: a checkbox acts as the section header and the
@@ -25,8 +25,10 @@ status_group = VGroup(
 # selector, and the setpoint spinboxes for the selected heater.
 control_group = VGroup(
     HGroup(
-        # Toggle: PWM (open-loop duty, off) vs Temp (closed-loop PID, on).
-        # Replaces the old PID on/off toggle — the backend enables PID iff Temp.
+        # Toggle: PWM (open-loop duty, off) vs Temp (closed-loop PID, on) —
+        # selects which setpoint (temperature vs PWM) is applied. PID
+        # enablement is independent, controlled by the "PID control" toggle
+        # below (PWM-mode + PID-on is allowed).
         UReadonly("mode"),
         UItem(
             "mode",
@@ -60,6 +62,17 @@ control_group = VGroup(
         "pwm",
         label="Set PWM",
         enabled_when="connected and not halted and mode == 'PWM'",
+    ),
+    UItem(
+        "pid_enabled",
+        label="PID control",
+        editor=ToggleEditor(
+            on_value=True,
+            off_value=False,
+            bar_color=SUCCESS_COLOR,
+            handle_color=QColor(SUCCESS_COLOR).darker(),
+        ),
+        enabled_when="connected and not halted",
     ),
     visible_when="show_control",
     show_border=True,
