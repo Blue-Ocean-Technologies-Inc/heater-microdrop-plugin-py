@@ -127,7 +127,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
             HEATER_PALETTE, "--", PID_SERIES_PREFIX, "{} (PID)".format)
         changed |= self._update_lines(
             self._temp_ax, self._setpoint_lines, times, setpoints,
-            [SUCCESS_COLOR], "-", SETPOINT_SERIES_PREFIX,
+            [SUCCESS_COLOR], "--", SETPOINT_SERIES_PREFIX,
             lambda _name: "Setpoint")
         changed |= self._update_lines(
             self._pwm_ax, self._pwm_lines, times, pwms,
