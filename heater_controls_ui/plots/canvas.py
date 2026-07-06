@@ -12,6 +12,10 @@ Built to stay off the GUI's back:
   * The timer stops while the widget is hidden (closed / tabbed-behind pane).
   * Ticks early-out while the model is paused, and redraws are skipped
     entirely when the model's revision hasn't moved (e.g. telemetry stalled).
+  * A Clear-plot request (model's ``clear_requested`` counter) is drained
+    once per tick: the canvas calls the model's ``clear()`` and lets the
+    normal revision-triggered redraw below autoscale the axes to whatever
+    (post-clear) data is on the next snapshot.
   * Legend entries are clickable: a pick toggles the series in the model's
     ``hidden_series`` and hidden lines cost nothing to draw.
 """
@@ -76,6 +80,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._legend_entry_to_key = {}
 
         self._drawn_revision = None
+        self._drained_clear_requested = model.clear_requested
         self._theme = None
         self._apply_theme()
         self.mpl_connect("pick_event", self._on_legend_pick)
@@ -106,6 +111,9 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
     def _tick(self):
         if self._model.paused:
             return
+        if self._model.clear_requested != self._drained_clear_requested:
+            self._drained_clear_requested = self._model.clear_requested
+            self._model.clear()
         if self._model.enabled:
             self._model.sample(time.monotonic())
         theme_changed = self._apply_theme()
