@@ -69,7 +69,7 @@ control_group = VGroup(
         # PID owns the duty while enabled — manual PWM only with PID off.
         enabled_when="connected and not halted and mode == 'PWM' and not pid_enabled",
     ),
-    Item(
+    UItem(
         "pid_enabled",
         label="PID control",
         editor=InPlaceToggleEditor(on_label="PID On", off_label="PID Off"),
