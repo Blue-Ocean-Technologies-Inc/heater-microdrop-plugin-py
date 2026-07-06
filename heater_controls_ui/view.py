@@ -5,9 +5,9 @@ from traitsui.api import (
 )
 from traitsui.item import UReadonly
 
-from manual_controls.MVC import ToggleEditorFactory
-from microdrop_style.colors import INFO_COLOR, SUCCESS_COLOR
-from microdrop_utils.traitsui_qt_helpers import ToggleEditor, IconToggleEditor
+from microdrop_style.colors import INFO_COLOR
+from microdrop_utils.traitsui_qt_helpers import (
+    SlidingToggleEditor, InPlaceToggleEditor, IconToggleEditor)
 
 # Every section is collapsible: a checkbox acts as the section header and the
 # bordered group below it is shown only while its `show_*` trait is ticked, so
@@ -33,7 +33,7 @@ control_group = VGroup(
         UItem(
             "mode",
             label="Mode",
-            editor=ToggleEditor(
+            editor=SlidingToggleEditor(
                 on_value="Temp",
                 off_value="PWM",
                 bar_color=INFO_COLOR,
@@ -44,7 +44,7 @@ control_group = VGroup(
         UItem(
             "stream_active",
             style="custom",
-            editor=ToggleEditorFactory(on_label="Stream On", off_label="Stream Off"),
+            editor=InPlaceToggleEditor(on_label="Stream On", off_label="Stream Off"),
             enabled_when="connected"
         ),
     ),
@@ -72,7 +72,7 @@ control_group = VGroup(
     Item(
         "pid_enabled",
         label="PID control",
-        editor=ToggleEditor(on_value=True, off_value=False),
+        editor=InPlaceToggleEditor(on_label="PID On", off_label="PID Off"),
         enabled_when="connected and not halted",
     ),
     visible_when="show_control",
