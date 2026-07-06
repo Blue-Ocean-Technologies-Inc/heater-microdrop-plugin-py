@@ -61,7 +61,8 @@ control_group = VGroup(
     Item(
         "pwm",
         label="Set PWM",
-        enabled_when="connected and not halted and mode == 'PWM'",
+        # PID owns the duty while enabled — manual PWM only with PID off.
+        enabled_when="connected and not halted and mode == 'PWM' and not pid_enabled",
     ),
     Item(
         "pid_enabled",

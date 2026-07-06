@@ -86,7 +86,11 @@ class HeaterMessageHandler(BaseMessageHandler):
             logger.debug("Failed to parse telemetry")
             return
 
-        heater, updates = format_telemetry(data, pid_mode=self.model.mode == "Temp")
+        if data.get("_frame") == "INFO":
+            self._on_info_frame(data)
+            return
+
+        heater, updates = format_telemetry(data, pid_mode=self.model.pid_enabled)
         if updates:
             if heater is None:
                 self.model.trait_set(**updates)        # global readouts
@@ -95,18 +99,48 @@ class HeaterMessageHandler(BaseMessageHandler):
                 if readout is not None:
                     readout.trait_set(**updates)
 
-        # In Temp mode the PID regulates the duty; mirror the selected heater's
-        # live duty into the open-loop `pwm` setpoint so the "Set PWM" field
-        # tracks the real value (and switching back to PWM mode resumes from it,
-        # not a stale value). The pwm observer ignores writes while mode != "PWM",
-        # so this publishes no command.
-        if self.model.mode == "Temp" and heater == self.model.selected_heater:
+        # While PID drives the duty, mirror the selected heater's live duty
+        # into the open-loop `pwm` setpoint so the "Set PWM" field tracks the
+        # real value (and switching to PWM mode after PID resumes from it, not
+        # a stale value). The pwm observer ignores writes while PID is on, so
+        # this publishes no command.
+        if self.model.pid_enabled and heater == self.model.selected_heater:
             live_pwm = data.get("pwm_percentage")
             if isinstance(live_pwm, (int, float)):
                 self.model.pwm = max(PWM_MIN, min(PWM_MAX, round(live_pwm)))
 
         if data.get("_frame") == "ERR" and data.get("kind") in HALTING_ERR_KINDS:
             self.model.halted = True
+            # The board stopped driving the heater — its PID task is gone.
+            self._sync_pid_from_board(False)
+
+    def _on_info_frame(self, data):
+        """Structured §INFO events. The board is the source of truth for the
+        PID run state (pid_started / pid_stopped), exactly like the legacy
+        standalone UI's _on_info_frame."""
+        event = data.get("event")
+        if event == "pid_started":
+            self._sync_pid_from_board(True)
+        elif event == "pid_stopped":
+            self._sync_pid_from_board(False)
+        else:
+            logger.debug(f"Heater INFO event: {data}")
+
+    def _sync_pid_from_board(self, enabled):
+        """Reflect the board-reported PID state into the model WITHOUT
+        re-publishing commands: the controller's observers skip while
+        ``updating_from_board`` is set."""
+        enabled = bool(enabled)
+        if self.model.pid_enabled == enabled:
+            return
+        self.model.updating_from_board = True
+        try:
+            self.model.pid_enabled = enabled
+            if enabled:
+                self.model.mode = "Temp"   # PID owns the temperature loop
+        finally:
+            self.model.updating_from_board = False
+        logger.info(f"Heater UI: board reports PID {'started' if enabled else 'stopped'}")
 
     def _readout_for(self, name):
         """The HeaterReadout row for ``name``, or None if not yet known (the

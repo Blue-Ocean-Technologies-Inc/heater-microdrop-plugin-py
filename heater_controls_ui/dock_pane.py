@@ -94,6 +94,8 @@ class HeaterStatusDockPane(BaseStatusDockPane):
                 cancel=False,
                 checkbox_text="Don't show this again",
             )
+        else:
+            return   # streaming with PID on: nothing staged, no dialog
 
         # With checkbox_text, information() returns (result, checked).
         if isinstance(result, tuple) and result[1]:
