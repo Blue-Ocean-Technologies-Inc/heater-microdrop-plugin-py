@@ -27,6 +27,8 @@ HIDDEN_LEGEND_ENTRY_ALPHA = 0.25
 # Pause / Stop plot buttons (checkable, icon-font glyphs).
 PAUSE_PLOT_TOOLTIP = ("Pause the plot. Data keeps arriving in the background; "
                       "resume to continue (a gap marks the pause).")
+RESUME_PLOT_TOOLTIP = ("Resume the plot. Sampling and redraws pick back up "
+                       "from here (a gap marks the pause).")
 STOP_PLOT_TOOLTIP = ("Stop plotting entirely and discard the history. "
                      "Use this if the plot slows the application down.")
 

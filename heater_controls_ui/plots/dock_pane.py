@@ -12,14 +12,14 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
 from microdrop_style.fonts.fontnames import ICON_FONT_FAMILY
-from microdrop_style.icons.icons import ICON_PAUSE, ICON_STOP
+from microdrop_style.icons.icons import ICON_PAUSE, ICON_RESUME, ICON_STOP
 from logger.logger_service import get_logger
 
 from heater_controls_ui.consts import plot_listener_name
 
 from .consts import (
     PLOT_DOCK_PANE_ID, PLOT_DOCK_PANE_NAME,
-    PAUSE_PLOT_TOOLTIP, STOP_PLOT_TOOLTIP,
+    PAUSE_PLOT_TOOLTIP, RESUME_PLOT_TOOLTIP, STOP_PLOT_TOOLTIP,
 )
 from .model import HeaterPlotModel
 from .message_handler import HeaterPlotMessageHandler
@@ -95,6 +95,11 @@ class HeaterPlotDockPane(DockPane):
 
     def _on_pause_toggled(self, checked):
         self.model.paused = checked
+        # Swap glyph + tooltip to signal the paused/running state, matching
+        # the protocol controls' play/pause/resume icon convention.
+        self._pause_button.setText(ICON_RESUME if checked else ICON_PAUSE)
+        self._pause_button.setToolTip(
+            RESUME_PLOT_TOOLTIP if checked else PAUSE_PLOT_TOOLTIP)
 
     def _on_stop_toggled(self, checked):
         self.model.enabled = not checked
