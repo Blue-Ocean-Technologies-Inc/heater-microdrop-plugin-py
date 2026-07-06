@@ -87,12 +87,6 @@ class HeaterControlsController(BaseStatusController):
             self._publish(SET_PWM, self._heater_payload(pwm=self.model.pwm))
             self._echo_commanded_pwm(self.model.pwm)
 
-    def _apply_pid_mode(self):
-        """Drive the board's PID enable/disable to match the current `pid_enabled`
-        toggle. Called only while streaming is on (the master gate), same as
-        `_apply_mode` — decoupled from `mode` so PWM-mode + PID-on is allowed."""
-        self._publish(SET_PID_MODE, self._heater_payload(mode="enable" if self.model.pid_enabled else "disable"))
-
     # ------------------------------------------------------------------ #
     # Observers → published commands                                       #
     # ------------------------------------------------------------------ #
@@ -102,25 +96,31 @@ class HeaterControlsController(BaseStatusController):
     @observe("model:temperature")
     def _on_temperature_changed(self, event):
         if self.model.mode != "Temp":
+            logger.debug("Heater in PWM mode. Temperature cannot be changed.")
             return
-        if self.model.stream_active:
+        if self.model.stream_active and self.model.pid_enabled:
             self._publish(SET_TEMPERATURE, self._heater_payload(temperature=event.new))
-            logger.debug(f"Temperature → {event.new} °C")
+            logger.debug(f"Temperature --> {event.new} °C")
         else:
-            logger.debug(f"Temperature setpoint {event.new} °C staged (stream off)")
+            logger.debug(f"Temperature setpoint {event.new} °C staged (stream off or pid mode disabled)")
             self.model.stream_off_edit_warning = True
 
     @observe("model:pwm")
     def _on_pwm_changed(self, event):
         if self.model.mode != "PWM":
+            logger.debug("Heater in temperature mode. PWM cannot be changed.")
             return
-        if self.model.stream_active:
-            self._publish(SET_PWM, self._heater_payload(pwm=event.new))
-            self._echo_commanded_pwm(event.new)
-            logger.debug(f"PWM → {event.new} %")
-        else:
+        if self.model.pid_enabled:
+            logger.debug("Heater in PID mode. PWM cannot be changed.")
+            return
+        if not self.model.stream_active:
             logger.debug(f"PWM duty {event.new} % staged (stream off)")
             self.model.stream_off_edit_warning = True
+            return
+
+        self._publish(SET_PWM, self._heater_payload(pwm=event.new))
+        self._echo_commanded_pwm(event.new)
+        logger.debug(f"PWM → {event.new} %")
 
     @observe("model:mode")
     def _on_mode_changed(self, event):
@@ -128,18 +128,28 @@ class HeaterControlsController(BaseStatusController):
         # while streaming. While stream is off the mode is staged (applied by
         # _apply_mode when streaming starts).
         if self.model.stream_active:
+
+            if event.new == "PWM" and self.model.pid_enabled:
+                logger.warning("Not allowed to switch to PWM mode while PID control enabled.")
+                return
+
             self._apply_mode()
-            logger.debug(f"Mode → {event.new}")
+            logger.info(f"Heater UI: Mode --> {event.new}")
 
     @observe("model:pid_enabled")
-    def _on_pid_enabled_changed(self, event):
+    def _apply_pid_mode(self, event):
+        """Drive the board's PID enable/disable to match the current `pid_enabled`
+        toggle. Called only while streaming is on (the master gate), same as
+        `_apply_mode` — decoupled from `mode` so PWM-mode + PID-on is allowed."""
         # Dedicated PID on/off toggle, decoupled from mode: flipping it re-asserts
         # PID enable/disable only, but only while streaming (the master gate).
         # While stream is off the toggle is staged (applied by _apply_pid_mode
         # when streaming starts).
         if self.model.stream_active:
-            self._apply_pid_mode()
-            logger.debug(f"PID control → {'enabled' if event.new else 'disabled'}")
+            self._publish(SET_PID_MODE, self._heater_payload(mode="enable" if self.model.pid_enabled else "disable"))
+            logger.info(f"Heater UI: PID control --> {'enabled' if event.new else 'disabled'}.")
+            self.model.mode = "Temp"
+            logger.info("Heater UI: PID control ON --> Temperature Mode will be ON. PWM changes will not work.")
 
     @observe("model:stream_active")
     def _on_stream_active_changed(self, event):
@@ -147,7 +157,7 @@ class HeaterControlsController(BaseStatusController):
             # Start telemetry, then drive the board to the UI's current state:
             # the current PID on/off toggle and the current mode's setpoint.
             self._publish(SET_STREAM, {"group": "all"})
-            self._apply_pid_mode()
+            logger.info("Heater UI: Stream on request sent...")
             self._apply_mode()
         else:
             # Master-gate off: idle the board and stop telemetry, so nothing is

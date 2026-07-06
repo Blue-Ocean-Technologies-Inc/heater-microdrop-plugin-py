@@ -39,7 +39,7 @@ control_group = VGroup(
                 bar_color=INFO_COLOR,
                 handle_color=QColor(INFO_COLOR).darker(),
             ),
-            enabled_when="connected and not halted",
+            enabled_when="connected and not halted and not pid_enabled",
         ),
         UItem(
             "stream_active",
@@ -63,15 +63,10 @@ control_group = VGroup(
         label="Set PWM",
         enabled_when="connected and not halted and mode == 'PWM'",
     ),
-    UItem(
+    Item(
         "pid_enabled",
         label="PID control",
-        editor=ToggleEditor(
-            on_value=True,
-            off_value=False,
-            bar_color=SUCCESS_COLOR,
-            handle_color=QColor(SUCCESS_COLOR).darker(),
-        ),
+        editor=ToggleEditor(on_value=True, off_value=False),
         enabled_when="connected and not halted",
     ),
     visible_when="show_control",
@@ -113,6 +108,7 @@ all_temps_group = VGroup(
     visible_when="show_all_temps",
     show_border=True,
 )
+
 
 def _collapse_header(trait, label):
     """A section header row: a Material arrow glyph that expands (▾) / collapses
