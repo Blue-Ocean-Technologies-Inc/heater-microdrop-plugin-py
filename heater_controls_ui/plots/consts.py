@@ -38,9 +38,9 @@ STOP_PLOT_TOOLTIP = ("Stop plotting entirely and discard the history. "
 # ICON_PAUSE / ICON_RESUME — rendered through ICON_FONT_FAMILY.
 CLEAR_PLOT_ICON = "delete_sweep"
 CLEAR_PLOT_TOOLTIP = ("Clear the plotted history and recalibrate the axes to "
-                     "recent values. Telemetry keeps arriving in the "
-                     "background - this only resets the view, it does not "
-                     "pause or stop plotting.")
+                      "recent values. Telemetry keeps arriving in the "
+                      "background — this only resets the view, it does not "
+                      "pause or stop plotting.")
 
 # Categorical palette for per-sensor temperature lines — brand colours ordered
 # for high adjacent contrast, cycled when there are more sensors than colours.

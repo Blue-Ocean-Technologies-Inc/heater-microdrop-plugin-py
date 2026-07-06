@@ -119,11 +119,23 @@ class HeaterPlotDockPane(DockPane):
         self._pause_button.setText(ICON_RESUME if checked else ICON_PAUSE)
         self._pause_button.setToolTip(
             RESUME_PLOT_TOOLTIP if checked else PAUSE_PLOT_TOOLTIP)
+        # Clearing while paused would silently do nothing (the canvas never
+        # ticks to drain the request while paused), so grey it out too.
+        self._clear_button.setEnabled(
+            not checked and not self._stop_button.isChecked())
 
     def _on_stop_toggled(self, checked):
         self.model.enabled = not checked
-        # Pausing a stopped plot is meaningless — grey the button out.
+        # Pausing a stopped plot is meaningless — grey the button out. This
+        # must only ever touch the pause button's enabled state, never its
+        # checked state/glyph/tooltip — those are owned solely by
+        # _on_pause_toggled, and the pause glyph's correctness relies on
+        # that invariant.
         self._pause_button.setEnabled(not checked)
+        # Clearing a stopped plot is equally meaningless (Stop already
+        # dropped the history), so grey it out here too, unless paused.
+        self._clear_button.setEnabled(
+            not checked and not self._pause_button.isChecked())
 
     def _on_clear_clicked(self):
         # View-only purge: flip a model trait, the canvas drains it on its

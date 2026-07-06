@@ -129,10 +129,15 @@ def test_draining_a_clear_request_recalibrates_to_post_clear_telemetry():
     m = HeaterPlotModel()
     m.apply({"temperatures": {"inlet": 99.0}})   # an old extreme value
     m.sample(now=0.0)
+    revision_before_request = m.revision
     m.request_clear()
+    assert m.revision == revision_before_request  # request alone: no redraw yet
 
     # What the canvas does once it observes clear_requested has moved.
     m.clear()
+    assert m.revision > revision_before_request    # drain: revision advances,
+                                                    # ties clear_requested to
+                                                    # the redraw signal
 
     assert m.snapshot() == ([], {}, {}, {})
     assert m.enabled is True                      # plotting stays live
