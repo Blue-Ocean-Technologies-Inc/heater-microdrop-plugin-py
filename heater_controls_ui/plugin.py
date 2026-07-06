@@ -42,17 +42,17 @@ class HeaterControlsUiPlugin(BaseStatusPlugin):
             )
         ]
 
-    @observe("application.application_initialized")
+    @observe("application:extra_plugins_loaded")
     def _on_app_initialized(self, event):
 
         # check if peripheral board connected
         if check_connected_ports_hwid(HEATER_HWID):
             logger.critical(
-                "Peripheral Board Maybe Connected: Requesting Peripheral Board Search"
+                "Heater Board Maybe Connected: Requesting Heater Board Search"
             )
             publish_message(message="", topic=START_DEVICE_MONITORING)
         else:
             logger.info(
-                "Peripheral Board not connected. To start search, goto tools menu:"
-                "Tools -> Peripherals -> Z-Stage -> Search Connection or use the peripheral UI Dock Pane button."
+                "Heater Board not connected. To start search, goto tools menu:"
+                "Tools -> Peripherals -> Heater -> Search Connection or use Heater UI status bar Button."
             )
