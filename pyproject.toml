@@ -46,7 +46,4 @@ version_provider = "pep621"
 tag_format = "v$version"
 bump_message = "chore: release v$new_version [skip ci]"
 update_changelog_on_bump = true
-version_files = [
-    "pyproject.toml:^version",
-    "microdrop_plugin.toml:^version",
-]
+version_files = ["pyproject.toml:^version"]

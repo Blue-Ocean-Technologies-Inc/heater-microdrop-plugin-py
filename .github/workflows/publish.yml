@@ -4,8 +4,8 @@ name: Publish to prefix.dev
 # https://prefix.dev/microdrop-plugins on every push to main that contains
 # release-worthy conventional commits. commitizen derives the bump from the
 # commit messages since the last v* tag (fix/refactor/perf -> patch,
-# feat -> minor, BREAKING CHANGE / ! -> major), stamps pyproject.toml +
-# microdrop_plugin.toml (see [tool.commitizen] version_files), and maintains
+# feat -> minor, BREAKING CHANGE / ! -> major), stamps pyproject.toml
+# (see [tool.commitizen] version_files), and maintains
 # CHANGELOG.md. Pushes with nothing release-worthy (docs/ci/chore or
 # non-conventional messages) skip publishing cleanly.
 #
@@ -78,7 +78,7 @@ jobs:
           fi
           [ "$rc" -eq 0 ] || exit "$rc"
           echo "skip=false" >> "$GITHUB_OUTPUT"
-          grep -n '^version' pyproject.toml microdrop_plugin.toml
+          grep -n '^version' pyproject.toml
 
       - name: Authenticate with prefix.dev
         if: steps.bump.outputs.skip != 'true'

@@ -1,7 +1,6 @@
 schema_version = 1
 name = "heater"
 label = "Heater"
-version = "1.0.1"
 packages = ["heater_controller", "heater_controls_ui", "heater_protocol_controls"]
 
 [[groups]]
