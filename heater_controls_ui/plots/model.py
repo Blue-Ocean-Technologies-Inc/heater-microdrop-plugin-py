@@ -58,6 +58,8 @@ class HeaterPlotModel(HasTraits):
     _sensor_series = Dict()         # sensor_name -> [float|None]
     _pid_series = Dict()            # heater -> [float|None]
     _pwm_series = Dict()            # heater -> [float|None]
+    _latest_setpoint = Any(None)    # current PID target (None = no target)
+    _setpoint_series = Dict()       # {"setpoint": [float|None]}
 
     def __lock_default(self):
         return threading.Lock()
@@ -74,13 +76,26 @@ class HeaterPlotModel(HasTraits):
             temps = sample.get("temperatures")
             if temps:
                 self._latest_temps.update(temps)
-                return
             heater = sample.get("heater")
             if heater is not None:
                 if "pid_temperature" in sample:
                     self._latest_pid[heater] = sample["pid_temperature"]
                 if "pwm_percentage" in sample:
                     self._latest_pwm[heater] = sample["pwm_percentage"]
+
+    def set_setpoint(self, value):
+        """Latest PID target for the green setpoint line; None gaps it out
+        (PID off / stream stopped)."""
+        with self._lock:
+            self._latest_setpoint = value
+
+    def drop_pid_series(self):
+        """PID stopped: stop holding the closed-loop values so the PID and
+        PID-driven PWM lines gap out instead of flatlining at stale values
+        (the PWM line resumes from the open-loop command echo)."""
+        with self._lock:
+            self._latest_pid.clear()
+            self._latest_pwm.clear()
 
     def clear(self):
         """Drop all history and latest values (e.g. on a fresh connection)."""
@@ -89,10 +104,12 @@ class HeaterPlotModel(HasTraits):
             self._latest_temps.clear()
             self._latest_pid.clear()
             self._latest_pwm.clear()
+            self._latest_setpoint = None
             self._times.clear()
             self._sensor_series.clear()
             self._pid_series.clear()
             self._pwm_series.clear()
+            self._setpoint_series.clear()
             self.revision += 1
 
     @observe("enabled")
@@ -119,18 +136,25 @@ class HeaterPlotModel(HasTraits):
             self._extend(self._sensor_series, self._latest_temps, length)
             self._extend(self._pid_series, self._latest_pid, length)
             self._extend(self._pwm_series, self._latest_pwm, length)
+            self._extend(
+                self._setpoint_series,
+                {} if self._latest_setpoint is None
+                else {"setpoint": self._latest_setpoint},
+                length)
             self._trim()
             self.revision += 1
 
     def snapshot(self):
         """A consistent copy for drawing: ``(times, sensor_series, pid_series,
-        pwm_series)`` with the series as ``{key: [values]}`` (lists copied)."""
+        pwm_series, setpoint_series)`` with the series as ``{key: [values]}``
+        (lists copied)."""
         with self._lock:
             return (
                 list(self._times),
                 {k: list(v) for k, v in self._sensor_series.items()},
                 {k: list(v) for k, v in self._pid_series.items()},
                 {k: list(v) for k, v in self._pwm_series.items()},
+                {k: list(v) for k, v in self._setpoint_series.items()},
             )
 
     # ------------------------------------------------------------------ #
@@ -139,13 +163,19 @@ class HeaterPlotModel(HasTraits):
     @staticmethod
     def _extend(series, latest, length):
         """Append this tick's value for every key in ``latest``, back-filling
-        None for a key seen for the first time so its list aligns with ``_times``."""
+        None for a key seen for the first time so its list aligns with
+        ``_times`` — and appending None (a plot gap) for series keys that are
+        no longer in ``latest`` (e.g. after drop_pid_series), so every column
+        stays time-aligned instead of flatlining or falling behind."""
         for key, value in latest.items():
             column = series.get(key)
             if column is None:
                 column = [None] * (length - 1)
                 series[key] = column
             column.append(value)
+        for column in series.values():
+            if len(column) < length:
+                column.append(None)
 
     def _trim(self):
         if len(self._times) <= MAX_PLOT_POINTS:

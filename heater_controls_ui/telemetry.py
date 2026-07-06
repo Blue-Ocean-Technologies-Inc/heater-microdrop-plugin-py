@@ -50,24 +50,30 @@ def telemetry_samples(data):
     if frame in ("WHOAMI", "ERR", "INFO"):
         return {}
 
+    # Take EVERY plottable key the frame carries, whatever its kind: the board
+    # emits only one frame family per run mode (PID_<HEATER> frames while PID
+    # runs, TEMP frames on the plain stream), and PID frames carry the
+    # per-sensor ``temperatures`` snapshot alongside the loop values — the
+    # legacy UI read them all uniformly. Splitting by frame kind starved
+    # whichever series family the current mode didn't emit.
+    out = {}
+    temps = data.get("temperatures") or {}
+    if isinstance(temps, dict):
+        clean = {name: float(value) for name, value in temps.items()
+                 if isinstance(value, (int, float)) and value > INVALID_TEMP_THRESHOLD}
+        if clean:
+            out["temperatures"] = clean
+
     heater = heater_from_frame(frame)
     if heater is not None:
-        out = {"heater": heater}
+        out["heater"] = heater
         pid_temp = data.get("pid_temperature")
         if isinstance(pid_temp, (int, float)) and pid_temp > INVALID_TEMP_THRESHOLD:
             out["pid_temperature"] = float(pid_temp)
         pwm = data.get("pwm_percentage")
         if isinstance(pwm, (int, float)):
             out["pwm_percentage"] = float(pwm)
-        return out
-
-    temps = data.get("temperatures") or {}
-    if isinstance(temps, dict):
-        clean = {name: float(value) for name, value in temps.items()
-                 if isinstance(value, (int, float)) and value > INVALID_TEMP_THRESHOLD}
-        if clean:
-            return {"temperatures": clean}
-    return {}
+    return out if ("heater" in out or "temperatures" in out) else {}
 
 
 def format_telemetry(data, pid_mode=False):
