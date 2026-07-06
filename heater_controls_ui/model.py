@@ -63,6 +63,25 @@ class HeaterStatusModel(BaseStatusModel):
     # the backend's PID auto-drives the duty toward the temperature setpoint.
     # Temp first → the default (closed-loop PID) when the pane first opens.
     mode = Enum("Temp", "PWM", desc="Open-loop PWM duty vs closed-loop temperature (PID)")
+    # Sensor group used for streaming and PID input, matching the legacy UI's
+    # dropdown: "all" streams/regulates on every sensor (the default), the
+    # named groups restrict to that bus, and "None" omits the group suffix so
+    # the board falls back to its default sensor.
+    sensor_group = Enum("all", "thermistors", "onewire", "None",
+                        desc="Sensor group for streaming/PID (None = board default)")
+    # Dedicated PID on/off toggle. PID on implies Temp mode (the controller
+    # forces it and the view locks the mode toggle): the board enters PID by
+    # receiving a temperature setpoint and leaves it via pid_stop + a plain
+    # stream restart, so there is no PID+PWM combination. Defaults off — the
+    # user engages closed-loop control explicitly. The board is the source of
+    # truth: §INFO pid_started/pid_stopped frames sync this trait.
+    pid_enabled = Bool(False, desc="Backend closed-loop PID control engaged")
+    # True while the message handler is reflecting BOARD-reported state (§INFO
+    # pid_started/pid_stopped, halting ERR frames) into the model. Controller
+    # observers skip publishing while set, so board echoes never loop back
+    # into commands (the legacy Qt UI relied on setChecked() not firing
+    # `clicked`; trait observers fire on every assignment, hence this guard).
+    updating_from_board = Bool(False, desc="Model change originates from board telemetry")
     # Master gate: while off, nothing streams from the board and we send it no
     # setpoint commands (edits are staged and applied when streaming starts).
     stream_active = Bool(False, desc="Telemetry streaming active")

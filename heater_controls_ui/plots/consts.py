@@ -19,6 +19,7 @@ PLOT_UPDATE_INTERVAL_MS = 500
 SENSOR_SERIES_PREFIX = "sensor:"
 PID_SERIES_PREFIX = "pid:"
 PWM_SERIES_PREFIX = "pwm:"
+SETPOINT_SERIES_PREFIX = "target:"
 
 # Legend entries for hidden series stay visible but dimmed to this alpha.
 HIDDEN_LEGEND_ENTRY_ALPHA = 0.25

@@ -5,9 +5,9 @@ from traitsui.api import (
 )
 from traitsui.item import UReadonly
 
-from manual_controls.MVC import ToggleEditorFactory
 from microdrop_style.colors import INFO_COLOR
-from microdrop_utils.traitsui_qt_helpers import ToggleEditor, IconToggleEditor
+from microdrop_utils.traitsui_qt_helpers import (
+    SlidingToggleEditor, InPlaceToggleEditor, IconToggleEditor)
 
 # Every section is collapsible: a checkbox acts as the section header and the
 # bordered group below it is shown only while its `show_*` trait is ticked, so
@@ -25,24 +25,26 @@ status_group = VGroup(
 # selector, and the setpoint spinboxes for the selected heater.
 control_group = VGroup(
     HGroup(
-        # Toggle: PWM (open-loop duty, off) vs Temp (closed-loop PID, on).
-        # Replaces the old PID on/off toggle — the backend enables PID iff Temp.
+        # Toggle: PWM (open-loop duty, off) vs Temp (closed-loop PID, on) —
+        # selects which setpoint (temperature vs PWM) is applied. PID
+        # enablement is independent, controlled by the "PID control" toggle
+        # below (PWM-mode + PID-on is allowed).
         UReadonly("mode"),
         UItem(
             "mode",
             label="Mode",
-            editor=ToggleEditor(
+            editor=SlidingToggleEditor(
                 on_value="Temp",
                 off_value="PWM",
                 bar_color=INFO_COLOR,
                 handle_color=QColor(INFO_COLOR).darker(),
             ),
-            enabled_when="connected and not halted",
+            enabled_when="connected and not halted and not pid_enabled",
         ),
         UItem(
             "stream_active",
             style="custom",
-            editor=ToggleEditorFactory(on_label="Stream On", off_label="Stream Off"),
+            editor=InPlaceToggleEditor(on_label="Stream On", off_label="Stream Off"),
             enabled_when="connected"
         ),
     ),
@@ -52,6 +54,11 @@ control_group = VGroup(
         editor=EnumEditor(name="object.available_heaters"),
     ),
     Item(
+        "sensor_group",
+        label="Sensors",
+        enabled_when="connected and not halted",
+    ),
+    Item(
         "temperature",
         label="Set temperature",
         enabled_when="connected and not halted and mode == 'Temp'",
@@ -59,7 +66,14 @@ control_group = VGroup(
     Item(
         "pwm",
         label="Set PWM",
-        enabled_when="connected and not halted and mode == 'PWM'",
+        # PID owns the duty while enabled — manual PWM only with PID off.
+        enabled_when="connected and not halted and mode == 'PWM' and not pid_enabled",
+    ),
+    Item(
+        "pid_enabled",
+        label="PID control",
+        editor=InPlaceToggleEditor(on_label="PID On", off_label="PID Off"),
+        enabled_when="connected and not halted",
     ),
     visible_when="show_control",
     show_border=True,
@@ -100,6 +114,7 @@ all_temps_group = VGroup(
     visible_when="show_all_temps",
     show_border=True,
 )
+
 
 def _collapse_header(trait, label):
     """A section header row: a Material arrow glyph that expands (▾) / collapses

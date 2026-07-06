@@ -15,6 +15,11 @@ BOARD_BAUDRATE = 115200
 # HEATERS_AVAILABLE so a frontend can offer a selection dropdown.
 DEFAULT_HEATER = "tec1"
 
+# Delay between stopping the board's current run mode and starting the next
+# one (legacy standalone UI's COMMAND_DELAY_SHORT): the firmware task needs
+# time to wind down before a new pid/stream task starts cleanly.
+COMMAND_DELAY_SHORT = 1
+
 # Markers the firmware wraps its `dump_config` JSON response in.
 CONFIG_BEGIN = "<<<CONFIG_BEGIN>>>"
 CONFIG_END = "<<<CONFIG_END>>>"
@@ -59,6 +64,13 @@ SET_TEMPERATURE = f"{DEVICE_NAME}/requests/set_temperature"
 SET_PWM = f"{DEVICE_NAME}/requests/set_pwm"
 SET_PID_MODE = f"{DEVICE_NAME}/requests/set_pid_mode"
 SET_STREAM = f"{DEVICE_NAME}/requests/set_stream"
+# Run-mode transitions (ports of the legacy standalone UI's start_stream /
+# stop_stream): the whole stop-current -> delay -> start-new serial sequence
+# runs inside ONE backend handler invocation, because separate pub/sub
+# messages are consumed by a multi-threaded worker pool with no ordering
+# guarantee.
+START_STREAM = f"{DEVICE_NAME}/requests/start_stream"
+STOP_STREAM = f"{DEVICE_NAME}/requests/stop_stream"
 SET_FAN = f"{DEVICE_NAME}/requests/set_fan"
 ALL_OFF = f"{DEVICE_NAME}/requests/all_off"
 

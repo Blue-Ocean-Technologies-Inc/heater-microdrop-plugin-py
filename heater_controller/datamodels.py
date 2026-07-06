@@ -35,6 +35,29 @@ class ProtocolSetTemperatureData(_HeaterCommand):
     tolerance: float = Field(ge=0)
 
 
+class StartStreamData(_HeaterCommand):
+    """Legacy start_stream(): stop the current run mode, wait, then start
+    closed-loop PID (``pid=True``: the ``pid_<heater>_<temperature>[_<group>]``
+    setpoint command starts PID and its coupled stream) or plain telemetry
+    streaming — optionally re-asserting an open-loop duty on the fresh stream."""
+    pid: bool = False
+    temperature: Optional[float] = None
+    sensor_group: Optional[str] = None
+    pwm: Optional[int] = Field(default=None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _pid_needs_temperature(self):
+        if self.pid and self.temperature is None:
+            raise ValueError("pid=True requires a temperature setpoint")
+        return self
+
+
+class StopStreamData(_HeaterCommand):
+    """Legacy stop_stream(): stop whichever run mode is active; optionally turn
+    every output off afterwards (safety on UI stream-off)."""
+    all_off: bool = False
+
+
 class SetStreamData(BaseModel):
     """Telemetry streaming control. ``group`` is a sensor-group name, ``all`` for
     every sensor, or ``stop`` to halt streaming."""

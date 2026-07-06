@@ -1,8 +1,11 @@
-"""Dramatiq listener that feeds the heater plot model from telemetry.
+"""Dramatiq listener that feeds the heater plot model.
 
-Runs as its own listener (see ``plot_listener_name``), subscribed only to the
-telemetry topic, so the plot pane is independent of the status pane. It reuses
-the shared telemetry parsing and only pushes numbers into the plot model.
+Runs as its own listener (see ``plot_listener_name``), so the plot pane is
+independent of the status pane. It taps telemetry for the measured series and
+the heater REQUEST topics for the commanded ones — the green setpoint line
+(the PID target) and the open-loop duty echo, neither of which the board
+reports in telemetry (the plain stream carries no duty at all, so without the
+echo the PWM line froze at its last closed-loop value while in PWM mode).
 """
 import json
 
@@ -11,6 +14,7 @@ from traits.api import Instance
 from template_status_and_controls.base_message_handler import BaseMessageHandler
 from logger.logger_service import get_logger
 
+from heater_controller.consts import DEFAULT_HEATER
 from heater_controls_ui.telemetry import telemetry_samples
 from .model import HeaterPlotModel
 
@@ -18,17 +22,68 @@ logger = get_logger(__name__)
 
 
 class HeaterPlotMessageHandler(BaseMessageHandler):
-    """Appends telemetry samples to the plot model. The inherited connected /
-    disconnected / realtime handlers never fire here — this listener subscribes
-    to the telemetry topic only."""
+    """Feeds the plot model: telemetry samples, PID-target changes, and the
+    commanded open-loop duty. The inherited connected / disconnected /
+    realtime handlers never fire here — this listener's topics only."""
 
     model = Instance(HeaterPlotModel)
 
     def _on_telemetry_triggered(self, body):
+        data = self._payload(body)
+        if data is None:
+            return
+        if data.get("_frame") == "INFO":
+            # The board is the source of truth for the PID run state: when
+            # its PID task ends, gap the closed-loop lines and the target
+            # line instead of flatlining them at stale values.
+            if data.get("event") == "pid_stopped":
+                self.model.drop_pid_series()
+                self.model.set_setpoint(None)
+            return
+        self.model.apply(telemetry_samples(data))
+
+    # --- commanded values (request topics, published by the controller) ----
+
+    def _on_set_temperature_triggered(self, body):
+        data = self._payload(body)
+        temperature = (data or {}).get("temperature")
+        if isinstance(temperature, (int, float)):
+            self.model.set_setpoint(float(temperature))
+
+    def _on_set_pwm_triggered(self, body):
+        data = self._payload(body)
+        pwm = (data or {}).get("pwm")
+        if isinstance(pwm, (int, float)):
+            self.model.apply({
+                "heater": data.get("heater", DEFAULT_HEATER),
+                "pwm_percentage": float(pwm),
+            })
+
+    def _on_start_stream_triggered(self, body):
+        data = self._payload(body)
+        if data is None:
+            return
+        if data.get("pid"):
+            temperature = data.get("temperature")
+            if isinstance(temperature, (int, float)):
+                self.model.set_setpoint(float(temperature))
+        else:
+            self.model.set_setpoint(None)
+            pwm = data.get("pwm")
+            if isinstance(pwm, (int, float)):
+                self.model.apply({
+                    "heater": data.get("heater", DEFAULT_HEATER),
+                    "pwm_percentage": float(pwm),
+                })
+
+    def _on_stop_stream_triggered(self, body):
+        self.model.set_setpoint(None)
+
+    @staticmethod
+    def _payload(body):
         try:
             data = json.loads(body)
         except Exception:
-            logger.debug("Plot: failed to parse telemetry frame", exc_info=True)
-            return
-        if isinstance(data, dict):
-            self.model.apply(telemetry_samples(data))
+            logger.debug("Plot: failed to parse message payload", exc_info=True)
+            return None
+        return data if isinstance(data, dict) else None

@@ -77,13 +77,26 @@ class HeaterStatusDockPane(BaseStatusDockPane):
     def _warn_edit_stream_off(self, event):
         if self.heater_preferences is None or not self.heater_preferences.heater_show_stream_off_warning:
             return
-        result = information(
-            parent=None,
-            title="Streaming is off",
-            message="The change will apply when you start streaming.",
-            cancel=False,
-            checkbox_text="Don't show this again",
-        )
+
+        if not self.model.stream_active:
+            result = information(
+                parent=None,
+                title="Streaming is off",
+                message="The change will apply when you start streaming.",
+                cancel=False,
+                checkbox_text="Don't show this again",
+            )
+        elif not self.model.pid_enabled:
+            result = information(
+                parent=None,
+                title="PID control is off",
+                message="The change will apply when you Enable PID control.",
+                cancel=False,
+                checkbox_text="Don't show this again",
+            )
+        else:
+            return   # streaming with PID on: nothing staged, no dialog
+
         # With checkbox_text, information() returns (result, checked).
         if isinstance(result, tuple) and result[1]:
             self.heater_preferences.heater_show_stream_off_warning = False

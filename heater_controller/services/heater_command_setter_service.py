@@ -1,7 +1,10 @@
-from traits.api import provides, HasTraits, Instance
+import time
+
+from traits.api import provides, Bool, HasTraits, Instance
 
 from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 from ..heater_serial_proxy import HeaterSerialProxy
+from ..consts import COMMAND_DELAY_SHORT
 from ..datamodels import (
     SetTemperatureData,
     SetPwmData,
@@ -9,6 +12,8 @@ from ..datamodels import (
     SetStreamData,
     SetFanData,
     ProtocolSetTemperatureData,
+    StartStreamData,
+    StopStreamData,
 )
 
 from logger.logger_service import get_logger
@@ -32,6 +37,11 @@ class HeaterCommandSetterService(HasTraits):
         all_off         -> all_off
     """
     proxy = Instance(HeaterSerialProxy)
+
+    #: True while the board runs the PID-coupled stream task — mirrors the
+    #: legacy standalone UI's ``pid_active``, so the stop half of a transition
+    #: knows whether to send ``pid_stop`` or ``stream_stop``.
+    _pid_active = Bool(False)
 
     # ------------------------------------------------------------------
     # Generic raw command
@@ -90,6 +100,46 @@ class HeaterCommandSetterService(HasTraits):
         self._send("all_off")
 
     # ------------------------------------------------------------------
+    # Run-mode transitions — ports of the legacy standalone UI's
+    # start_stream() / stop_stream(). The whole stop-current -> delay ->
+    # start-new sequence runs inside ONE handler invocation: separate
+    # pub/sub messages are consumed by a multi-threaded worker pool with
+    # NO ordering guarantee, which is exactly how interleaved stream/pid
+    # commands corrupted the board's run mode.
+    # ------------------------------------------------------------------
+    def on_start_stream_request(self, message):
+        data = self._parse(StartStreamData, message)
+        if data is None:
+            return
+        # Stop any existing run mode first (legacy UI: pid_stop vs
+        # stream_stop), then give the firmware task time to wind down.
+        self._send("pid_stop" if self._pid_active else "stream_stop")
+        time.sleep(COMMAND_DELAY_SHORT)
+        if data.pid:
+            # The setpoint command itself starts PID + its coupled stream —
+            # there is no separate live "enable" in this flow.
+            if data.sensor_group:
+                self._send(f"pid_{data.heater}_{data.temperature}_{data.sensor_group}")
+            else:
+                self._send(f"pid_{data.heater}_{data.temperature}")
+            self._pid_active = True
+        else:
+            self._send(f"stream_{data.sensor_group}" if data.sensor_group else "stream_all")
+            self._pid_active = False
+            if data.pwm is not None:
+                # Re-assert the staged open-loop duty on the fresh stream.
+                self._send(f"pwm_{data.heater}_{data.pwm}")
+
+    def on_stop_stream_request(self, message):
+        data = self._parse(StopStreamData, message)
+        if data is None:
+            return
+        self._send("pid_stop" if self._pid_active else "stream_stop")
+        self._pid_active = False
+        if data.all_off:
+            self._send("all_off")
+
+    # ------------------------------------------------------------------
     # Protocol step: set target + arm the "reached within tolerance" ack
     # ------------------------------------------------------------------
     def on_protocol_set_temperature_request(self, message):
@@ -109,6 +159,7 @@ class HeaterCommandSetterService(HasTraits):
         self._send(f"pid_{heater}_enable")
         self._send(f"pid_{heater}_{data.temperature}")
         self._send("stream_all")
+        self._pid_active = True
         self.proxy.set_temperature_target(heater, data.temperature, data.tolerance)
 
     # ------------------------------------------------------------------

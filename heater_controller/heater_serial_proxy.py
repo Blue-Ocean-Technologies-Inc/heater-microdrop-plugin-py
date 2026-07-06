@@ -136,7 +136,7 @@ class HeaterSerialProxy:
                     if pkt is None:
                         logger.warning(f"Heater telemetry could not be parsed: {line}")
                     else:
-                        logger.info(f"HEATER TELEMETRY [{frame}]: {pkt}")
+                        logger.debug(f"HEATER TELEMETRY [{frame}]: {pkt}")
                         publish_message(json.dumps(pkt), TELEMETRY)
                         self._check_temperature_watch(frame, pkt)
                 elif self._route_config_line(line):
