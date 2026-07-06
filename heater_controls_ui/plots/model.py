@@ -182,6 +182,10 @@ class HeaterPlotModel(HasTraits):
             return
         cut = len(self._times) - MAX_PLOT_POINTS
         del self._times[:cut]
-        for store in (self._sensor_series, self._pid_series, self._pwm_series):
+        # EVERY series store must trim with _times — a store missing here
+        # outgrows the x-axis once the window overflows and crashes
+        # matplotlib's relim with a shape mismatch.
+        for store in (self._sensor_series, self._pid_series,
+                      self._pwm_series, self._setpoint_series):
             for key in store:
                 store[key] = store[key][cut:]

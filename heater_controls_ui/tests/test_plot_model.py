@@ -106,3 +106,24 @@ def test_rolling_window_caps_history():
     assert len(times) == MAX_PLOT_POINTS
     assert len(sensors["inlet"]) == MAX_PLOT_POINTS
     assert times[-1] == float(MAX_PLOT_POINTS + 49)     # newest retained
+
+
+def test_window_overflow_keeps_every_store_aligned():
+    """Regression: the setpoint store was missing from _trim, so once the
+    rolling window overflowed its column outgrew _times and crashed
+    matplotlib's relim with a shape mismatch. Every store must stay exactly
+    len(_times) after overflow."""
+    from heater_controls_ui.plots.consts import MAX_PLOT_POINTS
+
+    m = HeaterPlotModel()
+    m.set_setpoint(40.0)
+    m.apply({"heater": "tec1", "pid_temperature": 39.0,
+             "pwm_percentage": 50.0, "temperatures": {"t1": 38.5}})
+    for i in range(MAX_PLOT_POINTS + 300):
+        m.sample(float(i))
+
+    times, sensors, pids, pwms, setpoints = m.snapshot()
+    assert len(times) == MAX_PLOT_POINTS
+    for store in (sensors, pids, pwms, setpoints):
+        for column in store.values():
+            assert len(column) == len(times)
