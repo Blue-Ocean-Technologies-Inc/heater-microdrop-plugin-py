@@ -13,14 +13,15 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
 from microdrop_style.fonts.fontnames import ICON_FONT_FAMILY
-from microdrop_style.icons.icons import ICON_PAUSE, ICON_RESUME, ICON_STOP
+from microdrop_style.icons.icons import ICON_PAUSE, ICON_RESUME, ICON_STOP, ICON_PLAY
 from logger.logger_service import get_logger
 
 from heater_controls_ui.consts import plot_listener_name
 
 from .consts import (
     PLOT_DOCK_PANE_ID, PLOT_DOCK_PANE_NAME,
-    PAUSE_PLOT_TOOLTIP, RESUME_PLOT_TOOLTIP, STOP_PLOT_TOOLTIP,
+    PAUSE_PLOT_TOOLTIP, RESUME_PLOT_TOOLTIP,
+    STOP_PLOT_TOOLTIP, START_PLOT_TOOLTIP,
     CLEAR_PLOT_ICON, CLEAR_PLOT_TOOLTIP,
 )
 from .model import HeaterPlotModel
@@ -126,6 +127,12 @@ class HeaterPlotDockPane(DockPane):
 
     def _on_stop_toggled(self, checked):
         self.model.enabled = not checked
+        # Swap glyph + tooltip to signal the stopped/plotting state, same
+        # convention as the pause button: a stopped plot shows Play so the
+        # restart is one click away.
+        self._stop_button.setText(ICON_PLAY if checked else ICON_STOP)
+        self._stop_button.setToolTip(
+            START_PLOT_TOOLTIP if checked else STOP_PLOT_TOOLTIP)
         # Pausing a stopped plot is meaningless — grey the button out. This
         # must only ever touch the pause button's enabled state, never its
         # checked state/glyph/tooltip — those are owned solely by

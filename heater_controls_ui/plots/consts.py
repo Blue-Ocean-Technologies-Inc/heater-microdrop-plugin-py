@@ -31,6 +31,8 @@ RESUME_PLOT_TOOLTIP = ("Resume the plot. Sampling and redraws pick back up "
                        "from here (a gap marks the pause).")
 STOP_PLOT_TOOLTIP = ("Stop plotting entirely and discard the history. "
                      "Use this if the plot slows the application down.")
+START_PLOT_TOOLTIP = ("Start plotting again. Stop discarded the history, so "
+                      "the plot begins empty from live telemetry.")
 
 # Clear-plot button (momentary, not checkable). No suitable ICON_* exists in
 # microdrop_style.icons.icons for a "clear/sweep" glyph, so this is a Material
