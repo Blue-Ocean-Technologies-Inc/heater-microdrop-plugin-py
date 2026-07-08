@@ -1,3 +1,10 @@
+## v1.2.1 (2026-07-08)
+
+### Fix
+
+- ascii arrow in PWM log message
+- claim only heater-identified ports
+
 ## v1.2.0 (2026-07-06)
 
 ### Feat
