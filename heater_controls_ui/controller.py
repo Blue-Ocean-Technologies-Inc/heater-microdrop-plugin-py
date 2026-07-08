@@ -144,7 +144,7 @@ class HeaterControlsController(BaseStatusController):
 
         self._publish(SET_PWM, self._heater_payload(pwm=event.new))
         self._echo_commanded_pwm(event.new)
-        logger.debug(f"PWM → {event.new} %")
+        logger.debug(f"PWM --> {event.new} %")
 
     @observe("model:mode")
     def _on_mode_changed(self, event):
