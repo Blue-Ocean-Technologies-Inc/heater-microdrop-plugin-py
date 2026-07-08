@@ -1,5 +1,6 @@
-from serial.tools.list_ports import grep
 from traits.api import provides, Str, List
+
+from microdrop_utils.hardware_device_monitoring_helpers import find_port_by_device_id
 
 from peripheral_device_controller_base.services.peripheral_device_monitor_mixin_service import (
     PeripheralDeviceMonitorMixinService,
@@ -8,7 +9,7 @@ from logger.logger_service import get_logger
 
 from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 from ..heater_serial_proxy import HeaterSerialProxy
-from ..consts import HEATER_HWID, DEVICE_NAME
+from ..consts import HEATER_HWID, DEVICE_NAME, DEVICE_ID_FRAGMENT
 
 logger = get_logger(__name__)
 
@@ -25,14 +26,7 @@ class HeaterMonitorMixinService(PeripheralDeviceMonitorMixinService):
         return HeaterSerialProxy(port=port_name)
 
     def _find_port(self, hwids):
-        """Locate the heater's serial port by matching its VID:PID directly.
-
-        The shared ``check_devices_available`` greps for a ``USB Serial``
-        description first, which the RP2040 CDC port doesn't always carry; here we
-        match the VID:PID against the full hardware id instead.
-        """
-        for hwid in hwids:
-            for port in grep(hwid):
-                logger.info(f"Heater found on port {port.device} ({port.description})")
-                return str(port.device)
-        raise Exception(f"No heater for hwids {hwids} found")
+        """Locate the heater by VID:PID AND whoami identity: the fluorescence
+        LED board shares the Pico 2E8A:0005 id, so each candidate port is
+        probed for a device_id containing "heater" before it is claimed."""
+        return find_port_by_device_id(hwids, DEVICE_ID_FRAGMENT)
