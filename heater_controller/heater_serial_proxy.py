@@ -8,6 +8,7 @@ import serial
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from logger.logger_service import get_logger
 
+from .data_logger import heater_data_logger
 from .consts import (
     CONNECTED,
     DISCONNECTED,
@@ -138,6 +139,10 @@ class HeaterSerialProxy:
                     else:
                         logger.debug(f"HEATER TELEMETRY [{frame}]: {pkt}")
                         publish_message(json.dumps(pkt), TELEMETRY)
+                        # Telemetry log collection (port of the legacy UI's
+                        # DataLogger); a no-op unless the command service
+                        # started a log for the running stream.
+                        heater_data_logger.log(pkt)
                         self._check_temperature_watch(frame, pkt)
                 elif self._route_config_line(line):
                     continue  # consumed by the dump_config capture state machine
@@ -153,6 +158,8 @@ class HeaterSerialProxy:
         except Exception as e:
             logger.error(f"Heater serial reader crashed: {e}", exc_info=True)
         finally:
+            # No more telemetry can arrive — flush out any active data log.
+            heater_data_logger.stop()
             logger.debug("Heater serial reader thread terminated")
 
     # ------------------------------------------------------------------
@@ -332,6 +339,7 @@ class HeaterSerialProxy:
     def terminate(self):
         """Stop the reader thread and close the port. Intentional shutdown — does
         not publish the disconnected signal."""
+        heater_data_logger.stop()
         self._stop_reader.set()
         if self.reader_thread and self.reader_thread.is_alive():
             self.reader_thread.join(timeout=1.0)

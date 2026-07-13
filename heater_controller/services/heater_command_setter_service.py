@@ -2,9 +2,12 @@ import time
 
 from traits.api import provides, Bool, HasTraits, Instance
 
+from microdrop_application.helpers import get_current_experiment_directory
+
 from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 from ..heater_serial_proxy import HeaterSerialProxy
-from ..consts import COMMAND_DELAY_SHORT
+from ..data_logger import heater_data_logger
+from ..consts import COMMAND_DELAY_SHORT, HEATER_LOGS_DIR_NAME
 from ..datamodels import (
     SetTemperatureData,
     SetPwmData,
@@ -98,6 +101,7 @@ class HeaterCommandSetterService(HasTraits):
 
     def on_all_off_request(self, message):
         self._send("all_off")
+        heater_data_logger.stop()
 
     # ------------------------------------------------------------------
     # Run-mode transitions — ports of the legacy standalone UI's
@@ -129,6 +133,7 @@ class HeaterCommandSetterService(HasTraits):
             if data.pwm is not None:
                 # Re-assert the staged open-loop duty on the fresh stream.
                 self._send(f"pwm_{data.heater}_{data.pwm}")
+        self._start_data_log()
 
     def on_stop_stream_request(self, message):
         data = self._parse(StopStreamData, message)
@@ -138,6 +143,7 @@ class HeaterCommandSetterService(HasTraits):
         self._pid_active = False
         if data.all_off:
             self._send("all_off")
+        heater_data_logger.stop()
 
     # ------------------------------------------------------------------
     # Protocol step: set target + arm the "reached within tolerance" ack
@@ -161,10 +167,31 @@ class HeaterCommandSetterService(HasTraits):
         self._send("stream_all")
         self._pid_active = True
         self.proxy.set_temperature_target(heater, data.temperature, data.tolerance)
+        self._start_data_log()
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def _start_data_log(self):
+        """Start a telemetry log for the stream just started, under the
+        current experiment's heater_logs folder. Only a real stream
+        OFF -> ON transition starts a file: an open log means the stream
+        was already running (run-mode changes mid-stream — PID on/off
+        flips, sensor-group restarts — also arrive as start_stream) and
+        keeps collecting into the same file; stop/all_off/disconnect
+        closing the log is what marks the stream as off. Never blocks the
+        stream itself — with no reachable experiment directory (e.g.
+        no-Redis test runs) the stream simply runs unlogged."""
+        if heater_data_logger.is_active:
+            return
+        try:
+            log_dir = get_current_experiment_directory() / HEATER_LOGS_DIR_NAME
+        except Exception as e:
+            logger.warning(f"No experiment directory for heater logs; "
+                           f"telemetry not logged: {e}")
+            return
+        heater_data_logger.start_new_log(log_dir)
+
     @staticmethod
     def _parse(model, message):
         """Validate the message JSON payload against ``model``; log and return

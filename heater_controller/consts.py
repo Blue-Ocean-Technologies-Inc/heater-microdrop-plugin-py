@@ -23,6 +23,11 @@ DEFAULT_HEATER = "tec1"
 # time to wind down before a new pid/stream task starts cleanly.
 COMMAND_DELAY_SHORT = 1
 
+# Folder inside the current experiment's directory that collects the
+# telemetry logs written while the board streams (port of the legacy
+# standalone UI's DataLogger, which used the same folder name).
+HEATER_LOGS_DIR_NAME = "heater_logs"
+
 # Markers the firmware wraps its `dump_config` JSON response in.
 CONFIG_BEGIN = "<<<CONFIG_BEGIN>>>"
 CONFIG_END = "<<<CONFIG_END>>>"
@@ -40,6 +45,9 @@ SEARCHING = searching_topic(DEVICE_NAME)
 HEATERS_AVAILABLE = f"{DEVICE_NAME}/signals/heaters_available"
 # Parsed §<FRAME>{json} telemetry packets (temperatures, PWM, board id, events).
 TELEMETRY = f"{DEVICE_NAME}/signals/telemetry"
+# A telemetry log file finished writing (payload: the saved file's path).
+# The Log Viewer tab auto-shows it.
+DATA_LOG_SAVED = f"{DEVICE_NAME}/signals/data_log_saved"
 # Full dump_config JSON document (the board's current sensor/heater config).
 CONFIG_DUMPED = f"{DEVICE_NAME}/signals/config_dumped"
 # JSON list of 1-Wire ROM ids discovered on the bus by the last scan.
