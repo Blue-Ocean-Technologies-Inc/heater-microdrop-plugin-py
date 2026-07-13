@@ -1,7 +1,7 @@
 """Static matplotlib canvas for a loaded heater telemetry log.
 
 The temperature plot of the live pane, drawn once per loaded log (the
-model's ``revision`` bump) instead of on a timer: per-sensor temperatures
+model's ``data_changed`` event) instead of on a timer: per-sensor temperatures
 solid, per-heater PID temperatures dashed, x-axis in elapsed seconds.
 Legend entries are clickable and toggle series exactly like the live
 canvas; pan/zoom/save come from the matplotlib toolbar the view adds.
@@ -43,7 +43,7 @@ class HeaterLogPlotCanvas(FigureCanvasQTAgg):
 
         self._apply_theme()
         self.mpl_connect("pick_event", self._on_legend_pick)
-        model.observe(self._on_revision_changed, "revision")
+        model.observe(self._on_data_changed, "data_changed", dispatch="ui")
         self._redraw()
 
     def showEvent(self, event):
@@ -52,7 +52,7 @@ class HeaterLogPlotCanvas(FigureCanvasQTAgg):
             self._redraw()
         super().showEvent(event)
 
-    def _on_revision_changed(self, event):
+    def _on_data_changed(self, event):
         self._redraw()
 
     # ------------------------------------------------------------------ #

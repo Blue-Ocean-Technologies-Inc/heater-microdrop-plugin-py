@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from traits.api import (
-    Dict, Directory, Event, HasTraits, Int, List, Property, Set, Str,
+    Dict, Directory, Event, HasTraits, List, Property, Set, Str,
 )
 
 from heater_controls_ui.telemetry import telemetry_samples
@@ -152,8 +152,11 @@ class HeaterLogViewerModel(HasTraits):
     #: (same key scheme as the live HeaterPlotModel).
     hidden_series = Set()
 
-    #: Bumped whenever a log finished loading; the canvas redraws on this.
-    revision = Int(0)
+    #: Fired whenever a log finished loading (or the plot was cleared);
+    #: the canvas redraws on it. An Event fits here — unlike the live
+    #: HeaterPlotModel's polled revision counter, this model is only ever
+    #: mutated on the GUI thread and the canvas observes instead of polls.
+    data_changed = Event()
 
     #: Fired (with the saved file's path) when the backend finishes
     #: writing a log — the controller browses to and selects that log.
@@ -180,7 +183,7 @@ class HeaterLogViewerModel(HasTraits):
         self.sensor_series = sensor_series
         self.pid_series = pid_series
         self.setpoint_series = setpoint_series
-        self.revision += 1
+        self.data_changed = True
         logger.info(f"Heater log loaded: {log_path} "
                     f"({self.start_time_text} -> {self.end_time_text})")
 
@@ -191,4 +194,4 @@ class HeaterLogViewerModel(HasTraits):
         self.sensor_series = {}
         self.pid_series = {}
         self.setpoint_series = {}
-        self.revision += 1
+        self.data_changed = True

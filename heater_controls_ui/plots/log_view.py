@@ -159,7 +159,7 @@ class HeaterLogViewerController(Controller):
             self.model.selected_log = ""
             self.model.clear()
 
-    @observe("model.selected_log", dispatch="ui")
+    @observe("model.selected_log")
     def _load_selected(self, event):
         for path in self.model.log_files:
             if path.name == self.model.selected_log:
