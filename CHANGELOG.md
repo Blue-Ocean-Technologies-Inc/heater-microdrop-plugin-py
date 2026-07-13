@@ -1,3 +1,14 @@
+## v1.3.0 (2026-07-13)
+
+### Feat
+
+- **plots**: Log Viewer tab for recorded telemetry logs
+- **controller**: collect telemetry logs per stream session
+
+### Refactor
+
+- **plots**: data_changed event replaces log model revision counter
+
 ## v1.2.1 (2026-07-08)
 
 ### Fix
