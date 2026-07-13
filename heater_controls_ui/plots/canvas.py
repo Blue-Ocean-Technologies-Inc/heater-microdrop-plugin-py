@@ -42,14 +42,15 @@ from .consts import (
 )
 
 
-def _theme_colors():
-    """(bg, text, grid) for the current app theme."""
+def theme_colors():
+    """(bg, text, grid) for the current app theme. Shared with the log
+    viewer's static canvas."""
     if is_dark_mode():
         return DARK_PLOT_BG, WHITE, GREY["dark"]
     return LIGHT_PLOT_BG, GREY["dark"], GREY["light"]
 
 
-def _color(palette, index):
+def palette_color(palette, index):
     return palette[index % len(palette)]
 
 
@@ -167,7 +168,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
                                   label=label_fn(name))
                 line_map[name] = line
                 changed = True
-            line.set_color(_color(palette, i))   # stable by sorted index
+            line.set_color(palette_color(palette, i))   # stable by sorted index
             line.set_data(times, _nan_backed(series[name]))
             line.set_visible(f"{key_prefix}{name}" not in self._model.hidden_series)
         return changed
@@ -176,7 +177,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
     # Legend picking (show / hide individual lines)                        #
     # ------------------------------------------------------------------ #
     def _rebuild_legends(self):
-        bg, text, grid = _theme_colors()
+        bg, text, grid = theme_colors()
         self._legend_entry_to_key.clear()
         # The temperature legend covers both its groups, sensors first.
         self._rebuild_axis_legend(
@@ -251,7 +252,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
     def _apply_theme(self):
         """Restyle the axes when the app theme flipped. Returns True when a
         restyle happened (the caller forces a redraw)."""
-        theme = _theme_colors()
+        theme = theme_colors()
         if theme == self._theme:
             return False
         self._theme = theme

@@ -1,15 +1,18 @@
 """Heater Plots dock pane.
 
-A lean pyface DockPane hosting the matplotlib canvas. It owns the plot model
-and its own telemetry listener, so it needs nothing from the status pane. The
-Pause / Stop / Clear buttons only flip model traits (paused / enabled /
-clear_requested) — the canvas reads those on its timer, keeping the
-model/view separation intact.
+A lean pyface DockPane with two tabs: the live matplotlib canvas and the
+static log viewer (a TraitsUI subpanel, see log_view). It owns the plot
+model and its own telemetry listener, so it needs nothing from the status
+pane. The Pause / Stop / Clear buttons only flip model traits (paused /
+enabled / clear_requested) — the canvas reads those on its timer, keeping
+the model/view separation intact.
 """
 from traits.api import Any, Instance
 from pyface.tasks.dock_pane import DockPane
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QToolButton,
+)
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
 from microdrop_style.fonts.fontnames import ICON_FONT_FAMILY
@@ -20,13 +23,16 @@ from heater_controls_ui.consts import plot_listener_name
 
 from .consts import (
     PLOT_DOCK_PANE_ID, PLOT_DOCK_PANE_NAME,
+    LIVE_PLOTS_TAB_LABEL, LOG_VIEWER_TAB_LABEL,
     PAUSE_PLOT_TOOLTIP, RESUME_PLOT_TOOLTIP,
     STOP_PLOT_TOOLTIP, START_PLOT_TOOLTIP,
     CLEAR_PLOT_ICON, CLEAR_PLOT_TOOLTIP,
 )
+from .log_model import HeaterLogViewerModel
 from .model import HeaterPlotModel
 from .message_handler import HeaterPlotMessageHandler
 from .canvas import HeaterPlotCanvas
+from .log_view import HeaterLogViewerController, LogView
 
 logger = get_logger(__name__)
 
@@ -41,6 +47,9 @@ class HeaterPlotDockPane(DockPane):
     #: (writer) and the canvas (reader).
     model = Instance(HeaterPlotModel, ())
     message_handler = Instance(HeaterPlotMessageHandler)
+    #: The log viewer tab's controller + its TraitsUI subpanel.
+    log_viewer = Instance(HeaterLogViewerController)
+    _log_viewer_ui = Any()
     _canvas = Any()
     _pause_button = Any()
     _clear_button = Any()
@@ -53,6 +62,22 @@ class HeaterPlotDockPane(DockPane):
             model=self.model, name=plot_listener_name)
 
     def create_contents(self, parent):
+        tabs = QTabWidget(parent)
+        tabs.addTab(self._create_live_tab(tabs), LIVE_PLOTS_TAB_LABEL)
+        # TraitsUI MVC: the Controller edits its model with LogView — the
+        # view context gets object=model and handler=controller for free.
+        model = HeaterLogViewerModel()
+        self.log_viewer = HeaterLogViewerController(model)
+        self._log_viewer_ui = model.edit_traits(view=LogView,
+                                                handler=self.log_viewer)
+        # DATA_LOG_SAVED (via the plot listener) auto-shows freshly saved
+        # logs in the tab.
+        self.message_handler.log_viewer_model = model
+
+        tabs.addTab(self._log_viewer_ui.control, LOG_VIEWER_TAB_LABEL)
+        return tabs
+
+    def _create_live_tab(self, parent):
         container = QWidget(parent)
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -82,6 +107,14 @@ class HeaterPlotDockPane(DockPane):
         if self._canvas is not None:
             self._canvas.stop()
             self._canvas = None
+        if self._log_viewer_ui is not None:
+            # Detach the saved-log feed before the UI dies — the listener
+            # outlives it by a moment and must not poke a disposed panel.
+            if self.message_handler is not None:
+                self.message_handler.log_viewer_model = None
+            self._log_viewer_ui.dispose()
+            self._log_viewer_ui = None
+            self.log_viewer = None
         # Release the plot listener's Dramatiq actor name so a re-mounted
         # pane can register fresh (runtime hot unload/reload).
         if self.message_handler is not None:

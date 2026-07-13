@@ -2,7 +2,7 @@ from microdrop_style.colors import ERROR_COLOR, SUCCESS_COLOR, GREY
 
 from heater_controller.consts import (  # noqa: F401 (re-export)
     DEVICE_NAME, START_DEVICE_MONITORING, DUMP_CONFIG, TELEMETRY,
-    SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,
+    DATA_LOG_SAVED, SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,
 )
 
 # This module's package.
@@ -16,11 +16,13 @@ plot_listener_name = f"{PKG}_plot_listener"
 # heaters_available, telemetry); the plot listener taps telemetry plus the
 # COMMANDED values (requests published by the controls pane) — the PID target
 # for the green setpoint line and the open-loop duty echo, neither of which
-# appears in telemetry.
+# appears in telemetry — plus the saved-log signal that auto-updates the
+# Log Viewer tab.
 ACTOR_TOPIC_DICT = {
     listener_name: [f"{DEVICE_NAME}/signals/#"],
     plot_listener_name: [
-        TELEMETRY, SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,
+        TELEMETRY, DATA_LOG_SAVED,
+        SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,
     ],
 }
 

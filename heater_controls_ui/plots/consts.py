@@ -9,6 +9,16 @@ from heater_controls_ui.consts import PKG
 PLOT_DOCK_PANE_ID = f"{PKG}.plot_dock_pane"
 PLOT_DOCK_PANE_NAME = "Heater Plots"
 
+# The pane's two tabs: the live rolling plots and the static log viewer.
+LIVE_PLOTS_TAB_LABEL = "Live"
+LOG_VIEWER_TAB_LABEL = "Log Viewer"
+
+# Heater telemetry logs (heater_controller.data_logger writes JSON Lines)
+# discovered in the browsed folder.
+LOG_FILE_GLOB = "*.jsonl"
+# Human-readable display of a loaded log's first/last packet times.
+LOG_TIME_DISPLAY_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 # Rolling-window size and redraw cadence (mirrors the old heater UI: a smooth
 # live view without unbounded memory growth).
 MAX_PLOT_POINTS = 500
