@@ -9,6 +9,7 @@ echo the PWM line froze at its last closed-loop value while in PWM mode).
 """
 import json
 
+from pyface.gui import GUI
 from traits.api import Instance
 
 from template_status_and_controls.base_message_handler import BaseMessageHandler
@@ -16,6 +17,7 @@ from logger.logger_service import get_logger
 
 from heater_controller.consts import DEFAULT_HEATER
 from heater_controls_ui.telemetry import telemetry_samples
+from .log_model import HeaterLogViewerModel
 from .model import HeaterPlotModel
 
 logger = get_logger(__name__)
@@ -27,6 +29,18 @@ class HeaterPlotMessageHandler(BaseMessageHandler):
     realtime handlers never fire here — this listener's topics only."""
 
     model = Instance(HeaterPlotModel)
+
+    #: Set by the dock pane once the Log Viewer tab exists; DATA_LOG_SAVED
+    #: then auto-shows freshly saved logs there.
+    log_viewer_model = Instance(HeaterLogViewerModel)
+
+    def _on_data_log_saved_triggered(self, body):
+        """A telemetry log finished writing (body = its path): show it in
+        the Log Viewer tab. Marshalled onto the GUI thread — this fires on
+        a dramatiq worker, and the trait drives folder scanning + Qt."""
+        if self.log_viewer_model is None or not body:
+            return
+        self.log_viewer_model.saved_log_path=str(body)
 
     def _on_telemetry_triggered(self, body):
         data = self._payload(body)
