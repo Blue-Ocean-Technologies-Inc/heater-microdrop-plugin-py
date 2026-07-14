@@ -2,17 +2,22 @@
 for a protocol step and blocks the step until the PID temperature is within a
 tolerance band of the target.
 
-Two coupled cells share one model + one handler (the PPT-11 compound framework):
+Three coupled cells share one model + one handler (the PPT-11 compound
+framework):
+  * set_temperature      (Bool)  — drive the heater on this step, or leave
+    it untouched (unchecked = no setpoint publish, no reached-ack wait)
   * target_temperature_c (Float) — the PID setpoint to drive toward
   * tolerance_c          (Float) — the +/- band that counts as "reached"
 
-The handler publishes PROTOCOL_SET_TEMPERATURE; the heater backend sets the
-target, watches the PID telemetry, and acks on TEMPERATURE_REACHED once within
-tolerance — which the step's ``ctx.wait_for`` is blocking on.
+For a checked step the handler publishes PROTOCOL_SET_TEMPERATURE; the heater
+backend sets the target, watches the PID telemetry, and acks on
+TEMPERATURE_REACHED once within tolerance — which the step's ``ctx.wait_for``
+is blocking on.
 """
 import json
 
-from traits.api import Float
+from pyface.qt.QtCore import Qt
+from traits.api import Bool, Float
 
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from heater_controller.consts import (
@@ -24,7 +29,10 @@ from pluggable_protocol_tree.models.compound_column import (
     BaseCompoundColumnHandler, BaseCompoundColumnModel, CompoundColumn,
     DictCompoundColumnView,
 )
+from pluggable_protocol_tree.views.columns.checkbox import CheckboxColumnView
 from pluggable_protocol_tree.views.columns.spinbox import DoubleSpinBoxColumnView
+
+from ..consts import SET_TEMPERATURE_FIELD_ID
 
 # Sensible defaults / spinbox ranges (mirror the heater UI's setpoint range).
 TARGET_DEFAULT = 40.0
@@ -34,22 +42,37 @@ TOLERANCE_MIN, TOLERANCE_MAX = 0.0, 20.0
 
 
 class TemperatureCompoundModel(BaseCompoundColumnModel):
-    """Two coupled fields; base_id 'heater_temperature' appears as the compound
-    id on each field's JSON column entry."""
+    """Three coupled fields; base_id 'heater_temperature' appears as the
+    compound id on each field's JSON column entry."""
     base_id = "heater_temperature"
 
     def field_specs(self):
         return [
+            FieldSpec(SET_TEMPERATURE_FIELD_ID, "Set Temp", False),
             FieldSpec("target_temperature_c", "Target Temp (°C)", TARGET_DEFAULT),
             FieldSpec("tolerance_c", "Tolerance (°C)", TOLERANCE_DEFAULT),
         ]
 
     def trait_for_field(self, field_id):
+        if field_id == SET_TEMPERATURE_FIELD_ID:
+            return Bool(False)
         if field_id == "target_temperature_c":
             return Float(TARGET_DEFAULT)
         if field_id == "tolerance_c":
             return Float(TOLERANCE_DEFAULT)
         raise KeyError(field_id)
+
+
+class TemperatureSetpointSpinBoxView(DoubleSpinBoxColumnView):
+    """Setpoint cell that is read-only while the step's Set Temp checkbox
+    is off (cross-cell editability via the canonical PPT-11 get_flags(row)
+    pattern, mirroring the magnet column's height cell)."""
+
+    def get_flags(self, row):
+        flags = super().get_flags(row)
+        if not getattr(row, SET_TEMPERATURE_FIELD_ID, False):
+            flags &= ~Qt.ItemIsEditable
+        return flags
 
 
 class TemperatureHandler(BaseCompoundColumnHandler):
@@ -67,6 +90,10 @@ class TemperatureHandler(BaseCompoundColumnHandler):
 
     def on_step(self, row, ctx):
         if getattr(ctx.protocol, "preview_mode", False):
+            return
+        # Unchecked = the step leaves the heater untouched: no setpoint
+        # publish, no reached-ack wait (issue #9).
+        if not getattr(row, SET_TEMPERATURE_FIELD_ID, False):
             return
         publish_message(
             topic=PROTOCOL_SET_TEMPERATURE,
@@ -96,9 +123,10 @@ def make_temperature_column():
     return CompoundColumn(
         model=TemperatureCompoundModel(),
         view=DictCompoundColumnView(cell_views={
-            "target_temperature_c": DoubleSpinBoxColumnView(
+            SET_TEMPERATURE_FIELD_ID: CheckboxColumnView(),
+            "target_temperature_c": TemperatureSetpointSpinBoxView(
                 low=TARGET_MIN, high=TARGET_MAX, decimals=1, single_step=1.0),
-            "tolerance_c": DoubleSpinBoxColumnView(
+            "tolerance_c": TemperatureSetpointSpinBoxView(
                 low=TOLERANCE_MIN, high=TOLERANCE_MAX, decimals=1, single_step=0.5),
         }),
         handler=TemperatureHandler(),
