@@ -1,3 +1,9 @@
+## v1.6.0 (2026-07-14)
+
+### Feat
+
+- **protocol-columns**: Set Temp checkbox to leave the heater untouched
+
 ## v1.5.0 (2026-07-14)
 
 ### Feat

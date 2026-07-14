@@ -1,6 +1,6 @@
 [project]
 name = "heater-microdrop-plugin"
-version = "1.5.0"
+version = "1.6.0"
 description = "MicroDrop heater plugin: board driver, status/controls + plotting UI, and protocol column"
 requires-python = ">=3.11"
 dependencies = []
@@ -27,7 +27,7 @@ preview = ["pixi-build"]
 
 [tool.pixi.package]
 name = "heater-microdrop-plugin"
-version = "1.5.0"
+version = "1.6.0"
 
 [tool.pixi.package.build.backend]
 name = "pixi-build-python"
