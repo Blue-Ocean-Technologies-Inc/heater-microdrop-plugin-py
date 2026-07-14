@@ -1,3 +1,9 @@
+## v1.5.0 (2026-07-14)
+
+### Feat
+
+- **controls-ui**: own Heater Settings preferences tab
+
 ## v1.4.0 (2026-07-14)
 
 ### Feat
