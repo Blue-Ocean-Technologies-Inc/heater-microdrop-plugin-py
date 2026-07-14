@@ -1,3 +1,9 @@
+## v1.4.0 (2026-07-14)
+
+### Feat
+
+- **protocol-columns**: stop stream and PID at protocol end
+
 ## v1.3.0 (2026-07-13)
 
 ### Feat
