@@ -1,8 +1,9 @@
+from envisage.api import PREFERENCES_CATEGORIES, PREFERENCES_PANES
 from heater_controller.consts import HEATER_HWID, START_DEVICE_MONITORING
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from microdrop_utils.hardware_device_monitoring_helpers import check_connected_ports_hwid
 from template_status_and_controls.base_plugin import BaseStatusPlugin
-from traits.api import observe
+from traits.api import List, observe
 
 from logger.logger_service import get_logger
 logger = get_logger(__name__)
@@ -19,6 +20,19 @@ class HeaterControlsUiPlugin(BaseStatusPlugin):
 
     id = PKG + ".plugin"
     name = f"{PKG_name} Plugin"
+
+    # Heater group on its own Heater Settings preferences tab (previously
+    # rendered by the magnet plugin's shared Peripheral Settings pane).
+    preferences_panes = List(contributes_to=PREFERENCES_PANES)
+    preferences_categories = List(contributes_to=PREFERENCES_CATEGORIES)
+
+    def _preferences_panes_default(self):
+        from .preferences import HeaterPreferencesPane
+        return [HeaterPreferencesPane]
+
+    def _preferences_categories_default(self):
+        from .preferences import heater_tab
+        return [heater_tab]
 
     def _get_dock_pane_class(self):
         from .dock_pane import HeaterStatusDockPane
