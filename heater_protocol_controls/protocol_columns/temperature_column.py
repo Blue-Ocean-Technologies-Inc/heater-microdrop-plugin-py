@@ -16,7 +16,8 @@ from traits.api import Float
 
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from heater_controller.consts import (
-    PROTOCOL_SET_TEMPERATURE, TEMPERATURE_REACHED, DEFAULT_HEATER,
+    PROTOCOL_SET_TEMPERATURE, STOP_STREAM, TEMPERATURE_REACHED,
+    DEFAULT_HEATER,
 )
 from pluggable_protocol_tree.interfaces.i_compound_column import FieldSpec
 from pluggable_protocol_tree.models.compound_column import (
@@ -77,6 +78,17 @@ class TemperatureHandler(BaseCompoundColumnHandler):
         )
         if self.ack_time_s > 0:
             ctx.wait_for(TEMPERATURE_REACHED, timeout=self.ack_time_s)
+
+    def on_post_protocol_end(self, ctx):
+        """Stop the PID + telemetry stream the protocol steps started —
+        unconditional at the end of every run (normal or aborted), with
+        all_off so nothing keeps heating unattended (the heater UI's
+        stream-off safety semantics). The backend also closes the
+        telemetry log on this."""
+        if getattr(ctx, "preview_mode", False):
+            return
+        publish_message(topic=STOP_STREAM,
+                        message=json.dumps({"all_off": True}))
 
 
 def make_temperature_column():
