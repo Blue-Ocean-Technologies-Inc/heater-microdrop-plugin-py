@@ -2,7 +2,11 @@ from typing import Optional, Literal, List, Dict
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .consts import DEFAULT_HEATER, OW_RESERVED_KEYS
+from peripheral_device_controller_base.firmware_upload_datamodels import (
+    UploadFirmwarePublisher,
+)
+
+from .consts import DEFAULT_HEATER, OW_RESERVED_KEYS, UPLOAD_FIRMWARE
 
 
 class _HeaterCommand(BaseModel):
@@ -126,3 +130,10 @@ class HeaterConfigEdit(BaseModel):
             raise ValueError(
                 f"Heater(s) reference undefined sensor(s): {', '.join(unknown)}")
         return self
+
+
+# Firmware-upload payload + publisher are shared (peripheral base); this plugin
+# only binds a publisher to its own upload topic. The dialog fills the
+# board-specific default device id (HEATER_BOARD_DEVICE_ID) before it reaches
+# the wire, so the payload itself carries no heater default.
+upload_firmware_publisher = UploadFirmwarePublisher(topic=UPLOAD_FIRMWARE)

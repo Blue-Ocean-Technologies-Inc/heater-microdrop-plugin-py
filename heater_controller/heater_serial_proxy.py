@@ -14,6 +14,7 @@ from .consts import (
     DISCONNECTED,
     HEATERS_AVAILABLE,
     TELEMETRY,
+    BOARD_ID,
     CONFIG_DUMPED,
     SENSORS_SCANNED,
     TEMPERATURE_REACHED,
@@ -27,6 +28,10 @@ logger = get_logger(__name__)
 
 # Telemetry frames arrive as: §<FRAME>{json}\n  e.g.  §PID_TEC1{"temp": 41.2}
 TELEMETRY_MARKER = "§"
+
+# The whoami reply comes as a §WHOAMI{json} frame — published as the board's
+# identity (BOARD_ID) rather than treated as ordinary telemetry.
+WHOAMI_FRAME = "WHOAMI"
 
 # A `scan` response line: "Sensor 0: 28FF1234567890AB" (16-hex-digit 1-Wire ROM).
 SCAN_LINE_RE = re.compile(r"Sensor\s+\d+\s*:\s*([0-9a-fA-F]{16})")
@@ -98,7 +103,9 @@ class HeaterSerialProxy:
         self.reader_thread.start()
 
         logger.info(f"Heater connected on port {port} at {baudrate} baud")
-        publish_message("connected", CONNECTED)
+        # Publish the actual port (not a literal): the firmware-upload dialog
+        # keeps its port combo in sync with this auto-detected port.
+        publish_message(port, CONNECTED)
 
         # Ask the board for its config (to advertise available heater channels)
         # and its identity (WHOAMI). Responses are handled by the reader thread.
@@ -136,6 +143,10 @@ class HeaterSerialProxy:
                     frame, pkt = self.parse_telemetry_line(line)
                     if pkt is None:
                         logger.warning(f"Heater telemetry could not be parsed: {line}")
+                    elif frame == WHOAMI_FRAME:
+                        # Board identity from the connect-time whoami probe.
+                        logger.debug(f"HEATER WHOAMI: {pkt}")
+                        publish_message(json.dumps(pkt), BOARD_ID)
                     else:
                         logger.debug(f"HEATER TELEMETRY [{frame}]: {pkt}")
                         publish_message(json.dumps(pkt), TELEMETRY)

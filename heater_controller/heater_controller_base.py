@@ -1,5 +1,8 @@
-from traits.api import Instance, Str
+from traits.api import Instance, List, Str
 
+from peripheral_device_controller_base.consts import (
+    DEFAULT_ALWAYS_ALLOWED_SUBTOPICS, FIRMWARE_UPLOAD_ALWAYS_ALLOWED_SUBTOPICS,
+)
 from peripheral_device_controller_base.peripheral_device_controller_base import PeripheralDeviceControllerBase
 
 from .heater_serial_proxy import HeaterSerialProxy
@@ -19,3 +22,11 @@ class HeaterControllerBase(PeripheralDeviceControllerBase):
     _device_name = Str(DEVICE_NAME)
     listener_name = Str("heater_controller_listener")
     proxy = Instance(HeaterSerialProxy)
+    # Firmware upload/cancel must run while disconnected: flashing IS the
+    # recovery path for a board whose firmware can't connect, and the upload
+    # service itself releases the proxy (disconnecting) before flashing.
+    _always_allowed_subtopics = List(
+        Str,
+        DEFAULT_ALWAYS_ALLOWED_SUBTOPICS
+        + FIRMWARE_UPLOAD_ALWAYS_ALLOWED_SUBTOPICS,
+    )
