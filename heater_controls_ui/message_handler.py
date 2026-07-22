@@ -5,7 +5,12 @@ from traits.api import Instance
 from template_status_and_controls.base_message_handler import BaseMessageHandler
 from logger.logger_service import get_logger
 
+from heater_controller.consts import (
+    FIRMWARE_UPLOAD_FINISHED, FIRMWARE_UPLOAD_LOG, FIRMWARE_UPLOAD_STARTED,
+)
+
 from .consts import PWM_MIN, PWM_MAX
+from .live_state import heater_live_state
 from .model import HeaterStatusModel
 from .sensor_config.model import SensorConfigModel
 from .telemetry import resolve_selection, format_telemetry
@@ -26,6 +31,51 @@ class HeaterMessageHandler(BaseMessageHandler):
     model = Instance(HeaterStatusModel)
     # Shared with the Configure Sensors & Heaters dialog (owned by the dock pane).
     config_model = Instance(SensorConfigModel)
+
+    def _on_connected_triggered(self, body):
+        """Base handler flips the connected flag; also ferry the board's
+        serial port to live_state so the firmware-upload dialog keeps its
+        port combo in sync with the auto-detected port. The monitor
+        republishes a "<device>_connected" sentinel (not a port) when asked
+        to start monitoring an already-connected board — ignore that."""
+        super()._on_connected_triggered(body)
+        port = str(body)
+        if port and not port.endswith("_connected"):
+            heater_live_state.board_port = port
+
+    def _on_disconnected_triggered(self, body):
+        """Base handler clears the connected flag; also clear the ferried
+        port and board id so the firmware-upload dialog shows no auto-detected
+        port and a blank board id while disconnected."""
+        super()._on_disconnected_triggered(body)
+        heater_live_state.board_port = ""
+        heater_live_state.board_device_id = ""
+
+    def _on_board_id_triggered(self, body):
+        """Identity from the connect-time whoami probe -> live_state, so the
+        firmware-upload dialog shows it read-only and flashes this board."""
+        try:
+            identity = json.loads(body)
+        except Exception:
+            logger.error(f"Unparseable board id payload: {body!r}")
+            return
+        heater_live_state.board_device_id = str(
+            identity.get("device_id") or "")
+
+    def _on_firmware_upload_started_triggered(self, body):
+        """Backend accepted an upload — ferry to the GUI thread via live_state
+        (the dialog's dispatch="ui" observer applies it)."""
+        heater_live_state.firmware_upload_message = (
+            FIRMWARE_UPLOAD_STARTED, body)
+
+    def _on_firmware_upload_log_triggered(self, body):
+        """One uploader progress line — ferry to the GUI thread."""
+        heater_live_state.firmware_upload_message = (FIRMWARE_UPLOAD_LOG, body)
+
+    def _on_firmware_upload_finished_triggered(self, body):
+        """Upload outcome — ferry to the GUI thread."""
+        heater_live_state.firmware_upload_message = (
+            FIRMWARE_UPLOAD_FINISHED, body)
 
     def _on_config_dumped_triggered(self, body):
         """Full dump_config JSON document → the configurator model."""
