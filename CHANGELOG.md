@@ -1,3 +1,10 @@
+## v1.7.0 (2026-07-22)
+
+### Feat
+
+- firmware upload via the shared peripheral base
+- **proxy**: publish port on connect and a board-id whoami signal
+
 ## v1.6.1 (2026-07-15)
 
 ## v1.6.0 (2026-07-14)
