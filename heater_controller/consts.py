@@ -1,4 +1,9 @@
-from peripheral_device_controller_base.consts import connected_topic, disconnected_topic, searching_topic
+from peripheral_device_controller_base.consts import (
+    connected_topic, disconnected_topic, searching_topic,
+    upload_firmware_topic, cancel_firmware_upload_topic,
+    firmware_upload_started_topic, firmware_upload_log_topic,
+    firmware_upload_finished_topic,
+)
 
 # This module's package.
 PKG = '.'.join(__name__.split('.')[:-1])
@@ -11,6 +16,10 @@ DEVICE_NAME = "Heater"
 # matches the whoami device_id before claiming a port.
 HEATER_HWID = "VID:PID=2E8A:0005"
 DEVICE_ID_FRAGMENT = "heater"
+# Full whoami device_id in the board's config.json (DEVICE_ID_FRAGMENT is the
+# substring the monitor greps for; the firmware-upload dialog falls back to
+# this exact id when no whoami has been received yet).
+HEATER_BOARD_DEVICE_ID = "heater_board"
 BOARD_BAUDRATE = 115200
 
 # Heater channel targeted when a command payload omits one (mirrors the old UI
@@ -57,6 +66,19 @@ CONFIG_PUSHED = f"{DEVICE_NAME}/signals/config_pushed"
 # Protocol ack: published when a watched heater's PID temperature reaches the
 # protocol target within tolerance. Payload {"heater": str, "temperature": float}.
 TEMPERATURE_REACHED = f"{DEVICE_NAME}/signals/temperature_reached"
+# Board identity from the connect-time whoami probe: JSON {"device_id", "uid", ...}.
+BOARD_ID = f"{DEVICE_NAME}/signals/board_id"
+
+# Firmware upload: the shared PeripheralFirmwareUploadService owns the run and
+# the shared dialog renders the signals below. Topic strings come from the
+# peripheral base factories. Upload / cancel are always-allowed subtopics
+# (HeaterControllerBase): flashing IS the recovery path for a board whose
+# firmware can't connect, and the service disconnects the proxy before it flashes.
+UPLOAD_FIRMWARE = upload_firmware_topic(DEVICE_NAME)
+CANCEL_FIRMWARE_UPLOAD = cancel_firmware_upload_topic(DEVICE_NAME)
+FIRMWARE_UPLOAD_STARTED = firmware_upload_started_topic(DEVICE_NAME)
+FIRMWARE_UPLOAD_LOG = firmware_upload_log_topic(DEVICE_NAME)
+FIRMWARE_UPLOAD_FINISHED = firmware_upload_finished_topic(DEVICE_NAME)
 
 # Service Request Topics
 START_DEVICE_MONITORING = f"{DEVICE_NAME}/requests/start_device_monitoring"
