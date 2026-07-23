@@ -1,3 +1,9 @@
+## v1.8.0 (2026-07-23)
+
+### Fix
+
+- **firmware-upload**: drop hardcoded dev firmware path
+
 ## v1.7.0 (2026-07-22)
 
 ### Feat
