@@ -10,7 +10,7 @@ magnet plugin's shared Peripheral Settings pane).
 """
 from apptools.preferences.api import PreferencesHelper
 from envisage.ui.tasks.api import PreferencesCategory, PreferencesPane
-from traits.api import Bool
+from traits.api import Bool, Directory
 from traitsui.api import Item, View
 
 from microdrop_style.text_styles import preferences_group_style_sheet
@@ -28,6 +28,8 @@ class HeaterPreferences(PreferencesHelper):
         True, desc="Show the 'applies when streaming starts' warning when "
                    "setting a heater setpoint while streaming is off"
     )
+
+    firmware_source = Directory(desc="Firmware directory or zip file")
 
 
 heater_tab = PreferencesCategory(
