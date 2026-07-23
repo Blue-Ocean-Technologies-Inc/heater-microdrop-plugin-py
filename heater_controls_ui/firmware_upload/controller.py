@@ -16,7 +16,7 @@ from heater_controller.consts import (
 from heater_controller.datamodels import upload_firmware_publisher
 
 from ..live_state import heater_live_state
-from .consts import DEFAULT_FIRMWARE_DIR
+from ..preferences import HeaterPreferences
 
 
 def make_firmware_upload_controller():
@@ -28,7 +28,7 @@ def make_firmware_upload_controller():
         started_topic=FIRMWARE_UPLOAD_STARTED,
         log_topic=FIRMWARE_UPLOAD_LOG,
         finished_topic=FIRMWARE_UPLOAD_FINISHED,
-        default_firmware_dir=str(DEFAULT_FIRMWARE_DIR),
         default_device_id=HEATER_BOARD_DEVICE_ID,
+        preferences=HeaterPreferences(),
         dialog_title="Upload Heater Firmware",
     )
