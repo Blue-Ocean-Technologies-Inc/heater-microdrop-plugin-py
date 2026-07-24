@@ -80,8 +80,8 @@ def format_telemetry(data, pid_mode=False):
     """Map a telemetry frame to ``(heater, updates)``.
 
     ``heater`` is the channel name the per-heater ``updates`` (temperature_display
-    / pwm_display) belong to, or None when the updates are global (board_id_text,
-    all_temps_display). ERR/INFO frames are handled elsewhere (halt / logging).
+    / pwm_display) belong to, or None when the updates are global
+    (all_temps_display). ERR/INFO frames are handled elsewhere (halt / logging).
 
     The board streams two frame kinds at once regardless of mode: ``TEMP`` frames
     carry only the per-sensor ``temperatures`` dict (global snapshot), and
@@ -93,9 +93,9 @@ def format_telemetry(data, pid_mode=False):
     """
     frame = data.get("_frame", "")
 
-    if frame == "WHOAMI":
-        ident = data.get("device_id") or data.get("uid") or "unknown"
-        return None, {"board_id_text": str(ident)}
+    # WHOAMI never reaches telemetry: the serial proxy intercepts §WHOAMI
+    # frames and publishes them as the BOARD_ID signal (the message handler's
+    # _on_board_id_triggered fills the Board readout from it).
     if frame in ("ERR", "INFO"):
         return None, {}
 
