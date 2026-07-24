@@ -1,3 +1,9 @@
+## v1.8.1 (2026-07-24)
+
+### Fix
+
+- **controls-ui**: show board id in the heater dock pane
+
 ## v1.8.0 (2026-07-23)
 
 ### Fix
