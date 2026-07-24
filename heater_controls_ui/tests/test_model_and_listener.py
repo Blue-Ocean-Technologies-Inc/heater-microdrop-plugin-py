@@ -85,15 +85,12 @@ def test_format_telemetry_invalid_temp_sentinel_resets_display():
     assert out["temperature_display"] == "-"
 
 
-def test_format_telemetry_whoami():
+def test_format_telemetry_whoami_has_no_display_updates():
+    # WHOAMI is intercepted by the serial proxy and published as the BOARD_ID
+    # signal; if one ever leaked into telemetry it must not update readouts.
     heater, out = format_telemetry({"_frame": "WHOAMI", "device_id": "heater-7", "uid": "abc"})
     assert heater is None
-    assert out == {"board_id_text": "heater-7"}
-
-
-def test_format_telemetry_whoami_falls_back_to_uid():
-    _, out = format_telemetry({"_frame": "WHOAMI", "uid": "abcd1234"})
-    assert out == {"board_id_text": "abcd1234"}
+    assert out == {}
 
 
 def test_format_telemetry_err_and_info_frames_have_no_display_updates():

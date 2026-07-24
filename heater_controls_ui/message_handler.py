@@ -52,13 +52,16 @@ class HeaterMessageHandler(BaseMessageHandler):
         heater_live_state.board_device_id = ""
 
     def _on_board_id_triggered(self, body):
-        """Identity from the connect-time whoami probe -> live_state, so the
+        """Identity from the connect-time whoami probe -> the Board readout
+        (device_id first, like the fluorescence pane) and live_state, so the
         firmware-upload dialog shows it read-only and flashes this board."""
         try:
             identity = json.loads(body)
         except Exception:
             logger.error(f"Unparseable board id payload: {body!r}")
             return
+        self.model.board_id_text = str(
+            identity.get("device_id") or identity.get("uid") or "unknown")
         heater_live_state.board_device_id = str(
             identity.get("device_id") or "")
 
