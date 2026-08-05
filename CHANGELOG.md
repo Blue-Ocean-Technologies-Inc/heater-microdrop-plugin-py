@@ -1,3 +1,13 @@
+## v1.9.0 (2026-08-05)
+
+### Feat
+
+- **controls-ui**: add fan toggle for TEC heaters
+
+### Fix
+
+- **controller**: throttle unparsed heater RX logging
+
 ## v1.8.1 (2026-07-24)
 
 ### Fix
