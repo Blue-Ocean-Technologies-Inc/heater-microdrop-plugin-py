@@ -6,7 +6,7 @@ import threading
 import serial
 
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
-from logger.logger_service import get_logger
+from logger.logger_service import get_logger, debug_throttled
 
 from .data_logger import heater_data_logger
 from .consts import (
@@ -160,7 +160,10 @@ class HeaterSerialProxy:
                 elif self._route_scan_line(line):
                     continue  # consumed by the scan capture
                 else:
-                    logger.info(f"HEATER RX: {line}")
+                    debug_throttled(
+                        logger, "Heater RX",
+                        f"HEATER RX: {line}"
+                    )
 
         except (OSError, serial.SerialException) as e:
             if not self._stop_reader.is_set():

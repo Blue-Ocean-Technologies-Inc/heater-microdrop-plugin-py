@@ -1,5 +1,6 @@
 import json
 
+from heater_controller.datamodels import SetFanData
 from traits.api import observe
 from pyface.qt.QtWidgets import QSizePolicy
 
@@ -10,7 +11,7 @@ from microdrop_utils.traitsui_qt_helpers import stretch_group_layouts_horizontal
 from logger.logger_service import get_logger
 
 from heater_controller.consts import (
-    SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,
+    SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM, SET_FAN,
 )
 
 logger = get_logger(__name__)
@@ -195,3 +196,8 @@ class HeaterControlsController(BaseStatusController):
             self.start_stream()
         else:
             self.stop_stream()
+
+    @observe("model:fan_enabled")
+    def _on_fan_enabled_changed(self, event):
+        logger.debug(f"Processing fan enabled request event: {event}")
+        publish_message(topic=SET_FAN, message=SetFanData(on=event.new).model_dump_json())

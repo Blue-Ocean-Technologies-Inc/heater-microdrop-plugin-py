@@ -110,11 +110,19 @@ class HeaterStatusModel(BaseStatusModel):
     # pane shows a one-time warning in response.
     stream_off_edit_warning = Event()
 
+    _tec_heater_present = Bool(False, desc="whether any TEC heater is available on the board")
+    fan_enabled = Bool(False)
+
     # ------------------------------------------------------------------ #
     # Keep one readout row per available heater                            #
     # ------------------------------------------------------------------ #
     @observe("available_heaters")
-    def _sync_heater_readouts(self, event):
+    def _on_available_heaters_changed(self, event):
+        logger.info(f"Available Heaters changed event: {event}")
+
+        # check tec presence
+        self._tec_heater_present = any("tec" in el for el in event.new)
+
         self.heater_readouts = reconcile_readouts(
             self.heater_readouts, self.available_heaters,
             lambda name: HeaterReadout(name=name),
