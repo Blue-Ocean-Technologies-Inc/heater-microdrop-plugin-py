@@ -75,6 +75,13 @@ control_group = VGroup(
         editor=InPlaceToggleEditor(on_label="PID On", off_label="PID Off"),
         enabled_when="connected and not halted",
     ),
+    UItem(
+        "fan_enabled",
+        label="Fan control",
+        editor=InPlaceToggleEditor(on_label="Fan On", off_label="Fan Off"),
+        enabled_when="connected and not halted and not pid_enabled",
+        visible_when="_tec_heater_present",
+    ),
     visible_when="show_control",
     show_border=True,
 )
