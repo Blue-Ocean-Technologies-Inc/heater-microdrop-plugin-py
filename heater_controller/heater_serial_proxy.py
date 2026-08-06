@@ -60,7 +60,7 @@ class HeaterSerialProxy:
     COMMAND_RETRY_DELAY = 0.5
 
     def __init__(self, port, baudrate=BOARD_BAUDRATE,
-                 expected_device_id_fragment=None):
+                 expected_device_id_fragment=None, serial_instance=None):
         self.port = port
         self.baudrate = baudrate
         # When set, a connect-time WHOAMI whose device_id lacks this fragment
@@ -89,13 +89,24 @@ class HeaterSerialProxy:
         self._scanning = False
         self._scan_buffer = []
 
-        # Opens the port (raises on failure so the monitor falls back to disconnect)
-        self.serial_port = serial.Serial(
-            port=port,
-            baudrate=int(baudrate),
-            timeout=self.SERIAL_TIMEOUT,
-            write_timeout=self.SERIAL_WRITE_TIMEOUT,
-        )
+        if serial_instance is not None:
+            # Adopt the monitor's ClaimedPort handle, open since the whoami
+            # probe identified this board: reopening here would race the
+            # other monitors' probes and Windows' USB-CDC close→reopen
+            # latency (observed as Access-denied retry storms).
+            self.serial_port = serial_instance
+            self.serial_port.baudrate = int(baudrate)
+            self.serial_port.timeout = self.SERIAL_TIMEOUT
+            self.serial_port.write_timeout = self.SERIAL_WRITE_TIMEOUT
+        else:
+            # Opens the port (raises on failure so the monitor falls back to
+            # disconnect)
+            self.serial_port = serial.Serial(
+                port=port,
+                baudrate=int(baudrate),
+                timeout=self.SERIAL_TIMEOUT,
+                write_timeout=self.SERIAL_WRITE_TIMEOUT,
+            )
 
         # Flush any stale bytes before we start reading.
         try:
