@@ -59,9 +59,14 @@ class HeaterSerialProxy:
     MAX_COMMAND_RETRIES = 3
     COMMAND_RETRY_DELAY = 0.5
 
-    def __init__(self, port, baudrate=BOARD_BAUDRATE):
+    def __init__(self, port, baudrate=BOARD_BAUDRATE,
+                 expected_device_id_fragment=None, serial_instance=None):
         self.port = port
         self.baudrate = baudrate
+        # When set, a connect-time WHOAMI whose device_id lacks this fragment
+        # means the monitor claimed the wrong board (VID:PID collision) — the
+        # proxy relinquishes the port so the rightful monitor can find it.
+        self._expected_device_id_fragment = expected_device_id_fragment
         self.transaction_lock = threading.Lock()
 
         self._stop_reader = threading.Event()
@@ -84,13 +89,24 @@ class HeaterSerialProxy:
         self._scanning = False
         self._scan_buffer = []
 
-        # Opens the port (raises on failure so the monitor falls back to disconnect)
-        self.serial_port = serial.Serial(
-            port=port,
-            baudrate=int(baudrate),
-            timeout=self.SERIAL_TIMEOUT,
-            write_timeout=self.SERIAL_WRITE_TIMEOUT,
-        )
+        if serial_instance is not None:
+            # Adopt the monitor's ClaimedPort handle, open since the whoami
+            # probe identified this board: reopening here would race the
+            # other monitors' probes and Windows' USB-CDC close→reopen
+            # latency (observed as Access-denied retry storms).
+            self.serial_port = serial_instance
+            self.serial_port.baudrate = int(baudrate)
+            self.serial_port.timeout = self.SERIAL_TIMEOUT
+            self.serial_port.write_timeout = self.SERIAL_WRITE_TIMEOUT
+        else:
+            # Opens the port (raises on failure so the monitor falls back to
+            # disconnect)
+            self.serial_port = serial.Serial(
+                port=port,
+                baudrate=int(baudrate),
+                timeout=self.SERIAL_TIMEOUT,
+                write_timeout=self.SERIAL_WRITE_TIMEOUT,
+            )
 
         # Flush any stale bytes before we start reading.
         try:
@@ -145,6 +161,22 @@ class HeaterSerialProxy:
                         logger.warning(f"Heater telemetry could not be parsed: {line}")
                     elif frame == WHOAMI_FRAME:
                         # Board identity from the connect-time whoami probe.
+                        device_id = (pkt.get("device_id", "")
+                                     if isinstance(pkt, dict) else "")
+                        if (self._expected_device_id_fragment
+                                and self._expected_device_id_fragment
+                                not in device_id):
+                            logger.warning(
+                                f"Heater proxy on {self.port} got WHOAMI "
+                                f"device_id '{device_id}' — expected a "
+                                f"'{self._expected_device_id_fragment}' "
+                                f"board; relinquishing the port")
+                            # terminate() is a silent teardown: publish the
+                            # disconnect ourselves so the monitor resumes
+                            # its search.
+                            publish_message("disconnected", DISCONNECTED)
+                            self.terminate()
+                            continue
                         logger.debug(f"HEATER WHOAMI: {pkt}")
                         publish_message(json.dumps(pkt), BOARD_ID)
                     else:
@@ -355,7 +387,10 @@ class HeaterSerialProxy:
         not publish the disconnected signal."""
         heater_data_logger.stop()
         self._stop_reader.set()
-        if self.reader_thread and self.reader_thread.is_alive():
+        # The wrong-board WHOAMI guard calls terminate() from the reader
+        # thread itself, which must not join itself.
+        if (self.reader_thread and self.reader_thread.is_alive()
+                and threading.current_thread() is not self.reader_thread):
             self.reader_thread.join(timeout=1.0)
         try:
             if self.serial_port and self.serial_port.is_open:
