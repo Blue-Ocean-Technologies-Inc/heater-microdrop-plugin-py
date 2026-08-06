@@ -69,18 +69,19 @@ control_group = VGroup(
         # PID owns the duty while enabled — manual PWM only with PID off.
         enabled_when="connected and not halted and mode == 'PWM' and not pid_enabled",
     ),
-    UItem(
-        "pid_enabled",
-        label="PID control",
-        editor=InPlaceToggleEditor(on_label="PID On", off_label="PID Off"),
-        enabled_when="connected and not halted",
-    ),
-    UItem(
-        "fan_enabled",
-        label="Fan control",
-        editor=InPlaceToggleEditor(on_label="Fan On", off_label="Fan Off"),
-        enabled_when="connected and not halted and not pid_enabled",
-        visible_when="_tec_heater_present",
+    HGroup(
+        Item(
+            "fan_enabled",
+            label="Fan",
+            editor=SlidingToggleEditor(),
+            enabled_when="connected and not halted and not pid_enabled and _tec_heater_present",
+        ),
+        UItem(
+            "pid_enabled",
+            label="PID control",
+            editor=InPlaceToggleEditor(on_label="PID On", off_label="PID Off"),
+            enabled_when="connected and not halted",
+        ),
     ),
     visible_when="show_control",
     show_border=True,
