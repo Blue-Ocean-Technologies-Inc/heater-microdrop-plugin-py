@@ -1,3 +1,14 @@
+## v1.9.1 (2026-08-06)
+
+### Fix
+
+- **controller**: adopt the monitor's claimed serial handle
+- **controller**: relinquish port on wrong-board whoami identity
+
+### Refactor
+
+- **controls-ui**: show fan as sliding switch beside PID toggle
+
 ## v1.9.0 (2026-08-05)
 
 ### Feat
