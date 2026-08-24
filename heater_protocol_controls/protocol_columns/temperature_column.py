@@ -20,6 +20,7 @@ from pyface.qt.QtCore import Qt
 from traits.api import Bool, Float
 
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
+from heater_controller.compensation import compensate_setpoint_from_preferences
 from heater_controller.consts import (
     PROTOCOL_SET_TEMPERATURE, STOP_STREAM, TEMPERATURE_REACHED,
     DEFAULT_HEATER,
@@ -99,7 +100,11 @@ class TemperatureHandler(BaseCompoundColumnHandler):
             topic=PROTOCOL_SET_TEMPERATURE,
             message=json.dumps({
                 "heater": DEFAULT_HEATER,
-                "temperature": float(row.target_temperature_c),
+                # Compensation (advanced-mode preference) maps the step's base
+                # target the same way the controls pane maps its setpoint; the
+                # tolerance band stays in raw degrees.
+                "temperature": compensate_setpoint_from_preferences(
+                    float(row.target_temperature_c)),
                 "tolerance": float(row.tolerance_c),
             }),
         )
