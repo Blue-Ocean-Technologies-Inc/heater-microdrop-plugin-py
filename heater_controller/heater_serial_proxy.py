@@ -180,7 +180,11 @@ class HeaterSerialProxy:
                         logger.debug(f"HEATER WHOAMI: {pkt}")
                         publish_message(json.dumps(pkt), BOARD_ID)
                     else:
-                        logger.debug(f"HEATER TELEMETRY [{frame}]: {pkt}")
+                        # Throttled: telemetry frames arrive ~1/s per frame
+                        # type and would otherwise dominate the debug log.
+                        debug_throttled(
+                            logger, f"Heater telemetry:{frame}",
+                            f"HEATER TELEMETRY [{frame}]: {pkt}")
                         publish_message(json.dumps(pkt), TELEMETRY)
                         # Telemetry log collection (port of the legacy UI's
                         # DataLogger); a no-op unless the command service
