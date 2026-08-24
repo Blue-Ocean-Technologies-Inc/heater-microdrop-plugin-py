@@ -128,7 +128,7 @@ class HeaterControlsController(BaseStatusController):
             # sensor group too (pid_<h>_<t>[_<group>]).
             temperature = compensate_setpoint_from_preferences(event.new)
             self._publish(SET_TEMPERATURE, self._group_payload(temperature=temperature))
-            logger.debug(f"Temperature --> {temperature} °C (base {event.new} °C)")
+            logger.info(f"Temperature --> {temperature} °C (base {event.new} °C)")
         else:
             logger.debug(f"Temperature setpoint {event.new} °C staged (stream off or pid mode disabled)")
             self.model.stream_off_edit_warning = True
