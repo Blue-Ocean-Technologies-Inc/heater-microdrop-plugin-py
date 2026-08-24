@@ -1,3 +1,16 @@
+## v1.10.0 (2026-08-24)
+
+### Feat
+
+- **protocol-controls**: compensate protocol step targets
+- **controls-ui**: compensate setpoints before publishing
+- **controls-ui**: advanced-mode compensation preferences
+- **controller**: add shared setpoint-compensation module
+
+### Fix
+
+- **controller**: throttle per-frame telemetry debug log
+
 ## v1.9.1 (2026-08-06)
 
 ### Fix
