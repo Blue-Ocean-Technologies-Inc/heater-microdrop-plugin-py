@@ -5,6 +5,7 @@ from traits.api import Instance
 from template_status_and_controls.base_message_handler import BaseMessageHandler
 from logger.logger_service import get_logger
 
+from heater_controller.compensation import HeaterCompensationPreferences
 from heater_controller.consts import (
     FIRMWARE_UPLOAD_FINISHED, FIRMWARE_UPLOAD_LOG, FIRMWARE_UPLOAD_STARTED,
 )
@@ -64,6 +65,17 @@ class HeaterMessageHandler(BaseMessageHandler):
             identity.get("device_id") or identity.get("uid") or "unknown")
         heater_live_state.board_device_id = str(
             identity.get("device_id") or "")
+
+    def _on_advanced_mode_change_triggered(self, body):
+        """Operator toggled Advanced Mode. Setpoint compensation is an
+        advanced-only feature: force the use-compensation preference off when
+        Advanced Mode turns off, so it never silently applies in normal mode."""
+        if str(body).casefold() == "true":
+            return
+        preferences = HeaterCompensationPreferences()
+        if preferences.heater_use_compensation:
+            preferences.heater_use_compensation = False
+            logger.info("Advanced Mode off: heater setpoint compensation disabled")
 
     def _on_firmware_upload_started_triggered(self, body):
         """Backend accepted an upload — ferry to the GUI thread via live_state
