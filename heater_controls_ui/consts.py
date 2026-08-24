@@ -1,3 +1,4 @@
+from microdrop_application.consts import ADVANCED_MODE_CHANGE
 from microdrop_style.colors import ERROR_COLOR, SUCCESS_COLOR, GREY
 
 from heater_controller.consts import (  # noqa: F401 (re-export)
@@ -13,13 +14,15 @@ listener_name = f"{PKG}_listener"
 plot_listener_name = f"{PKG}_plot_listener"
 
 # Main listener subscribes to all heater signals (connected/disconnected,
-# heaters_available, telemetry); the plot listener taps telemetry plus the
-# COMMANDED values (requests published by the controls pane) — the PID target
-# for the green setpoint line and the open-loop duty echo, neither of which
-# appears in telemetry — plus the saved-log signal that auto-updates the
-# Log Viewer tab.
+# heaters_available, telemetry) plus the Advanced Mode toggle (compensation is
+# advanced-only: the message handler force-clears the use-compensation
+# preference when Advanced Mode turns off); the plot listener taps telemetry
+# plus the COMMANDED values (requests published by the controls pane) — the
+# PID target for the green setpoint line and the open-loop duty echo, neither
+# of which appears in telemetry — plus the saved-log signal that auto-updates
+# the Log Viewer tab.
 ACTOR_TOPIC_DICT = {
-    listener_name: [f"{DEVICE_NAME}/signals/#"],
+    listener_name: [f"{DEVICE_NAME}/signals/#", ADVANCED_MODE_CHANGE],
     plot_listener_name: [
         TELEMETRY, DATA_LOG_SAVED,
         SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM,

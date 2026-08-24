@@ -10,6 +10,7 @@ from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from microdrop_utils.traitsui_qt_helpers import stretch_group_layouts_horizontally
 from logger.logger_service import get_logger
 
+from heater_controller.compensation import compensate_setpoint_from_preferences
 from heater_controller.consts import (
     SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM, SET_FAN,
 )
@@ -99,7 +100,8 @@ class HeaterControlsController(BaseStatusController):
         along (PID input selection / which sensors stream)."""
         payload = self._group_payload(pid=self.model.pid_enabled)
         if self.model.pid_enabled:
-            payload["temperature"] = self.model.temperature
+            payload["temperature"] = compensate_setpoint_from_preferences(
+                self.model.temperature)
         elif self.model.mode == "PWM":
             payload["pwm"] = self.model.pwm
             self._echo_commanded_pwm(self.model.pwm)
@@ -124,8 +126,9 @@ class HeaterControlsController(BaseStatusController):
         if self.model.stream_active and self.model.pid_enabled:
             # Legacy on_setpoint_changed: the live setpoint command carries the
             # sensor group too (pid_<h>_<t>[_<group>]).
-            self._publish(SET_TEMPERATURE, self._group_payload(temperature=event.new))
-            logger.debug(f"Temperature --> {event.new} °C")
+            temperature = compensate_setpoint_from_preferences(event.new)
+            self._publish(SET_TEMPERATURE, self._group_payload(temperature=temperature))
+            logger.info(f"Temperature --> {temperature} °C (base {event.new} °C)")
         else:
             logger.debug(f"Temperature setpoint {event.new} °C staged (stream off or pid mode disabled)")
             self.model.stream_off_edit_warning = True
