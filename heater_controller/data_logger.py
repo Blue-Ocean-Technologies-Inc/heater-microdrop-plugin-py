@@ -32,7 +32,10 @@ class HeaterDataLogger(HasTraits):
     #: Open file handle of the active log, or None while not logging.
     _log_file = Instance(io.IOBase)
 
-    _lock = Instance(threading.Lock)
+    # Typed by the lock object's class: threading.Lock is only a class from
+    # Python 3.12 on (a factory function before, which Traits would validate
+    # against instead -- rejecting every real lock).
+    _lock = Instance(type(threading.Lock()))
 
     def __lock_default(self):
         return threading.Lock()

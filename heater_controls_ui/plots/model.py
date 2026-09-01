@@ -54,7 +54,10 @@ class HeaterPlotModel(HasTraits):
     # Buffers (all access under _lock)                                     #
     # ------------------------------------------------------------------ #
 
-    _lock = Instance(threading.Lock)
+    # Typed by the lock object's class: threading.Lock is only a class from
+    # Python 3.12 on (a factory function before, which Traits would validate
+    # against instead -- rejecting every real lock).
+    _lock = Instance(type(threading.Lock()))
     _t0 = Any(None)                 # monotonic of the first sample
     # Latest value per key (sample-and-hold between telemetry frames).
     _latest_temps = Dict()          # sensor_name -> float
