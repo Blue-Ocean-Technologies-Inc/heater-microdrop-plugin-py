@@ -1,3 +1,9 @@
+## v1.10.1 (2026-09-01)
+
+### Fix
+
+- type the data logger and plot locks by the lock class
+
 ## v1.10.0 (2026-08-24)
 
 ### Feat
