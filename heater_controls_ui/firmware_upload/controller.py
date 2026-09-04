@@ -5,15 +5,18 @@ The dialog itself (model / view / controller) is device-agnostic and lives in
 the heater live_state, publisher, topics, and defaults.
 """
 
+from heater_controller.consts import (
+    CANCEL_FIRMWARE_UPLOAD,
+    FIRMWARE_UPLOAD_FINISHED,
+    FIRMWARE_UPLOAD_LOG,
+    FIRMWARE_UPLOAD_STARTED,
+    HEATER_BOARD_DEVICE_ID,
+)
+from heater_controller.datamodels import upload_firmware_publisher
+
 from microdrop_utils.firmware_upload_dialog.controller import (
     FirmwareUploadDialogController,
 )
-
-from heater_controller.consts import (
-    CANCEL_FIRMWARE_UPLOAD, FIRMWARE_UPLOAD_FINISHED, FIRMWARE_UPLOAD_LOG,
-    FIRMWARE_UPLOAD_STARTED, HEATER_BOARD_DEVICE_ID,
-)
-from heater_controller.datamodels import upload_firmware_publisher
 
 from ..live_state import heater_live_state
 from ..preferences import HeaterPreferences

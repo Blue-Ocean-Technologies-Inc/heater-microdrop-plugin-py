@@ -19,25 +19,32 @@ Built to stay off the GUI's back:
   * Legend entries are clickable: a pick toggles the series in the model's
     ``hidden_series`` and hidden lines cost nothing to draw.
 """
+
 import math
 import os
 import time
 
 os.environ.setdefault("QT_API", "pyside6")
 import matplotlib
-matplotlib.use("QtAgg")
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
 from PySide6.QtCore import QTimer
 
 from microdrop_style.colors import GREY, SUCCESS_COLOR, WHITE
 from microdrop_style.helpers import is_dark_mode
 
 from .consts import (
-    SENSOR_PALETTE, HEATER_PALETTE, DARK_PLOT_BG, LIGHT_PLOT_BG,
-    PLOT_UPDATE_INTERVAL_MS, HIDDEN_LEGEND_ENTRY_ALPHA,
-    SENSOR_SERIES_PREFIX, PID_SERIES_PREFIX, PWM_SERIES_PREFIX,
+    DARK_PLOT_BG,
+    HEATER_PALETTE,
+    HIDDEN_LEGEND_ENTRY_ALPHA,
+    LIGHT_PLOT_BG,
+    PID_SERIES_PREFIX,
+    PLOT_UPDATE_INTERVAL_MS,
+    PWM_SERIES_PREFIX,
+    SENSOR_PALETTE,
+    SENSOR_SERIES_PREFIX,
     SETPOINT_SERIES_PREFIX,
 )
 
@@ -105,7 +112,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
 
     def showEvent(self, event):
         self._timer.start(PLOT_UPDATE_INTERVAL_MS)
-        self._tick()                       # catch up immediately on reveal
+        self._tick()  # catch up immediately on reveal
         super().showEvent(event)
 
     # ------------------------------------------------------------------ #
@@ -129,18 +136,45 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         # (dashed, in the heater's colour) + the green PID target line.
         # PWM axis: one line per heater.
         changed = self._update_lines(
-            self._temp_ax, self._sensor_lines, times, sensors,
-            SENSOR_PALETTE, "-", SENSOR_SERIES_PREFIX, str)
+            self._temp_ax,
+            self._sensor_lines,
+            times,
+            sensors,
+            SENSOR_PALETTE,
+            "-",
+            SENSOR_SERIES_PREFIX,
+            str,
+        )
         changed |= self._update_lines(
-            self._temp_ax, self._pid_lines, times, pids,
-            HEATER_PALETTE, "--", PID_SERIES_PREFIX, "{} (PID)".format)
+            self._temp_ax,
+            self._pid_lines,
+            times,
+            pids,
+            HEATER_PALETTE,
+            "--",
+            PID_SERIES_PREFIX,
+            "{} (PID)".format,
+        )
         changed |= self._update_lines(
-            self._temp_ax, self._setpoint_lines, times, setpoints,
-            [SUCCESS_COLOR], "--", SETPOINT_SERIES_PREFIX,
-            lambda _name: "Setpoint")
+            self._temp_ax,
+            self._setpoint_lines,
+            times,
+            setpoints,
+            [SUCCESS_COLOR],
+            "--",
+            SETPOINT_SERIES_PREFIX,
+            lambda _name: "Setpoint",
+        )
         changed |= self._update_lines(
-            self._pwm_ax, self._pwm_lines, times, pwms,
-            HEATER_PALETTE, "-", PWM_SERIES_PREFIX, str)
+            self._pwm_ax,
+            self._pwm_lines,
+            times,
+            pwms,
+            HEATER_PALETTE,
+            "-",
+            PWM_SERIES_PREFIX,
+            str,
+        )
 
         if changed:
             self._rebuild_legends()
@@ -148,12 +182,13 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._temp_ax.relim(visible_only=True)
         self._temp_ax.autoscale_view()
         self._pwm_ax.relim(visible_only=True)
-        self._pwm_ax.autoscale_view(scaley=False)   # y stays fixed -5..105
+        self._pwm_ax.autoscale_view(scaley=False)  # y stays fixed -5..105
 
         self.draw_idle()
 
-    def _update_lines(self, ax, line_map, times, series, palette, linestyle,
-                      key_prefix, label_fn):
+    def _update_lines(
+        self, ax, line_map, times, series, palette, linestyle, key_prefix, label_fn
+    ):
         """Sync ``line_map`` to ``series``: create lines for new keys, drop
         vanished ones, push data into the rest. Returns True when the series
         set changed (legend needs a rebuild)."""
@@ -164,11 +199,12 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         for i, name in enumerate(sorted(series)):
             line = line_map.get(name)
             if line is None:
-                (line,) = ax.plot([], [], linestyle, linewidth=2, alpha=0.9,
-                                  label=label_fn(name))
+                (line,) = ax.plot(
+                    [], [], linestyle, linewidth=2, alpha=0.9, label=label_fn(name)
+                )
                 line_map[name] = line
                 changed = True
-            line.set_color(palette_color(palette, i))   # stable by sorted index
+            line.set_color(palette_color(palette, i))  # stable by sorted index
             line.set_data(times, _nan_backed(series[name]))
             line.set_visible(f"{key_prefix}{name}" not in self._model.hidden_series)
         return changed
@@ -181,13 +217,19 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._legend_entry_to_key.clear()
         # The temperature legend covers both its groups, sensors first.
         self._rebuild_axis_legend(
-            self._temp_ax, bg, text, grid,
-            [(SENSOR_SERIES_PREFIX, self._sensor_lines),
-             (PID_SERIES_PREFIX, self._pid_lines),
-             (SETPOINT_SERIES_PREFIX, self._setpoint_lines)])
+            self._temp_ax,
+            bg,
+            text,
+            grid,
+            [
+                (SENSOR_SERIES_PREFIX, self._sensor_lines),
+                (PID_SERIES_PREFIX, self._pid_lines),
+                (SETPOINT_SERIES_PREFIX, self._setpoint_lines),
+            ],
+        )
         self._rebuild_axis_legend(
-            self._pwm_ax, bg, text, grid,
-            [(PWM_SERIES_PREFIX, self._pwm_lines)])
+            self._pwm_ax, bg, text, grid, [(PWM_SERIES_PREFIX, self._pwm_lines)]
+        )
 
     def _rebuild_axis_legend(self, ax, bg, text, grid, groups):
         keys, handles = [], []
@@ -200,10 +242,17 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
                 ax.get_legend().remove()
             return
         legend = ax.legend(
-            handles=handles, loc="center left", bbox_to_anchor=(1.005, 0.5),
-            facecolor=bg, edgecolor=grid, labelcolor=text, fontsize=8)
+            handles=handles,
+            loc="center left",
+            bbox_to_anchor=(1.005, 0.5),
+            facecolor=bg,
+            edgecolor=grid,
+            labelcolor=text,
+            fontsize=8,
+        )
         for key, legend_line, legend_text in zip(
-                keys, legend.get_lines(), legend.get_texts()):
+            keys, legend.get_lines(), legend.get_texts()
+        ):
             legend_line.set_picker(5)
             legend_text.set_picker(True)
             self._legend_entry_to_key[legend_line] = key
@@ -226,10 +275,11 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         visible lines (a hidden series no longer dictates the axis range)."""
         hidden = self._model.hidden_series
         for key_prefix, line_map in (
-                (SENSOR_SERIES_PREFIX, self._sensor_lines),
-                (PID_SERIES_PREFIX, self._pid_lines),
-                (SETPOINT_SERIES_PREFIX, self._setpoint_lines),
-                (PWM_SERIES_PREFIX, self._pwm_lines)):
+            (SENSOR_SERIES_PREFIX, self._sensor_lines),
+            (PID_SERIES_PREFIX, self._pid_lines),
+            (SETPOINT_SERIES_PREFIX, self._setpoint_lines),
+            (PWM_SERIES_PREFIX, self._pwm_lines),
+        ):
             for name, line in line_map.items():
                 line.set_visible(f"{key_prefix}{name}" not in hidden)
         for legend_entry, key in self._legend_entry_to_key.items():
@@ -243,8 +293,8 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
     def _style_legend_entry(self, legend_entry, key):
         if hasattr(legend_entry, "set_alpha"):
             legend_entry.set_alpha(
-                HIDDEN_LEGEND_ENTRY_ALPHA
-                if key in self._model.hidden_series else 1.0)
+                HIDDEN_LEGEND_ENTRY_ALPHA if key in self._model.hidden_series else 1.0
+            )
 
     # ------------------------------------------------------------------ #
     # Theme                                                                #
@@ -258,10 +308,18 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._theme = theme
         bg, text, grid = theme
         self._figure.patch.set_facecolor(bg)
-        self._style_axis(self._temp_ax, "Temperature", "Temperature (°C)",
-                         bg, text, grid, xlabel=None)
-        self._style_axis(self._pwm_ax, "Heater PWM", "PWM (%)",
-                         bg, text, grid, xlabel="Time (s)")
+        self._style_axis(
+            self._temp_ax,
+            "Temperature",
+            "Temperature (°C)",
+            bg,
+            text,
+            grid,
+            xlabel=None,
+        )
+        self._style_axis(
+            self._pwm_ax, "Heater PWM", "PWM (%)", bg, text, grid, xlabel="Time (s)"
+        )
         self._pwm_ax.set_ylim(-5, 105)
         self._rebuild_legends()
         return True

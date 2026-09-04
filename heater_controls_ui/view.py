@@ -1,13 +1,26 @@
 from PySide6.QtGui import QColor
+
 from traitsui.api import (
-    View, Item, UItem, HGroup, VGroup, EnumEditor, ListEditor, InstanceEditor,
-    Readonly, Label,
+    EnumEditor,
+    HGroup,
+    InstanceEditor,
+    Item,
+    Label,
+    ListEditor,
+    Readonly,
+    UItem,
+    VGroup,
+    View,
 )
 from traitsui.item import UReadonly
 
 from microdrop_style.colors import INFO_COLOR
+
 from microdrop_utils.traitsui_qt_helpers import (
-    SlidingToggleEditor, InPlaceToggleEditor, IconToggleEditor)
+    IconToggleEditor,
+    InPlaceToggleEditor,
+    SlidingToggleEditor,
+)
 
 # Every section is collapsible: a checkbox acts as the section header and the
 # bordered group below it is shown only while its `show_*` trait is ticked, so
@@ -45,7 +58,7 @@ control_group = VGroup(
             "stream_active",
             style="custom",
             editor=InPlaceToggleEditor(on_label="Stream On", off_label="Stream Off"),
-            enabled_when="connected"
+            enabled_when="connected",
         ),
     ),
     Item(
@@ -74,7 +87,9 @@ control_group = VGroup(
             "fan_enabled",
             label="Fan",
             editor=SlidingToggleEditor(),
-            enabled_when="connected and not halted and not pid_enabled and _tec_heater_present",
+            enabled_when=(
+                "connected and not halted and not pid_enabled and _tec_heater_present"
+            ),
         ),
         UItem(
             "pid_enabled",
@@ -137,13 +152,10 @@ UnifiedView = View(
     VGroup(
         _collapse_header("show_status", "Status"),
         status_group,
-
         _collapse_header("show_control", "Control"),
         control_group,
-
         _collapse_header("show_heater_status", "Heater status"),
         readouts_group,
-
         _collapse_header("show_all_temps", "Show all temperatures"),
         all_temps_group,
     ),

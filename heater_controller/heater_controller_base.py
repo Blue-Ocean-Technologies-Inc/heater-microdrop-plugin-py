@@ -1,14 +1,18 @@
 from traits.api import Instance, List, Str
 
 from peripheral_device_controller_base.consts import (
-    DEFAULT_ALWAYS_ALLOWED_SUBTOPICS, FIRMWARE_UPLOAD_ALWAYS_ALLOWED_SUBTOPICS,
+    DEFAULT_ALWAYS_ALLOWED_SUBTOPICS,
+    FIRMWARE_UPLOAD_ALWAYS_ALLOWED_SUBTOPICS,
 )
-from peripheral_device_controller_base.peripheral_device_controller_base import PeripheralDeviceControllerBase
+from peripheral_device_controller_base.peripheral_device_controller_base import (
+    PeripheralDeviceControllerBase,
+)
 
-from .heater_serial_proxy import HeaterSerialProxy
 from .consts import DEVICE_NAME
+from .heater_serial_proxy import HeaterSerialProxy
 
 from logger.logger_service import get_logger
+
 logger = get_logger(__name__, level="INFO")
 
 
@@ -19,6 +23,7 @@ class HeaterControllerBase(PeripheralDeviceControllerBase):
     ``PeripheralDeviceControllerBase``; this subclass only pins the device
     identity and narrows the proxy trait type. No preferences yet.
     """
+
     _device_name = Str(DEVICE_NAME)
     listener_name = Str("heater_controller_listener")
     proxy = Instance(HeaterSerialProxy)
@@ -27,6 +32,5 @@ class HeaterControllerBase(PeripheralDeviceControllerBase):
     # service itself releases the proxy (disconnecting) before flashing.
     _always_allowed_subtopics = List(
         Str,
-        DEFAULT_ALWAYS_ALLOWED_SUBTOPICS
-        + FIRMWARE_UPLOAD_ALWAYS_ALLOWED_SUBTOPICS,
+        DEFAULT_ALWAYS_ALLOWED_SUBTOPICS + FIRMWARE_UPLOAD_ALWAYS_ALLOWED_SUBTOPICS,
     )

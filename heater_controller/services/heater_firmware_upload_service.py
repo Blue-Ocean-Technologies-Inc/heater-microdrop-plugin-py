@@ -1,11 +1,11 @@
-from traits.api import provides, Instance
+from traits.api import Instance, provides
 
-from peripheral_device_controller_base.services.peripheral_firmware_upload_service import (
+from peripheral_device_controller_base.services.peripheral_firmware_upload_service import (  # noqa: E501 -- dotted module path can't be shortened
     PeripheralFirmwareUploadService,
 )
 
-from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 from ..heater_serial_proxy import HeaterSerialProxy
+from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 
 
 @provides(IHeaterControlMixinService)
@@ -18,4 +18,5 @@ class HeaterFirmwareUploadService(PeripheralFirmwareUploadService):
     interface and narrows the proxy type so the plugin composes exactly the
     heater mixins.
     """
+
     proxy = Instance(HeaterSerialProxy)

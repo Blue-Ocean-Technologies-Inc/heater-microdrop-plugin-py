@@ -5,6 +5,7 @@ needs: the backend's upload signals, the connected board's whoami id, and its
 serial port. The message handler writes these on the dramatiq worker thread;
 the dialog controller observes them with dispatch="ui".
 """
+
 from traits.api import Event, HasTraits, Str
 
 

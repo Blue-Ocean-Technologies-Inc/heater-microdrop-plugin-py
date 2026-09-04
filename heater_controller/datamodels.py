@@ -1,4 +1,4 @@
-from typing import Optional, Literal, List, Dict
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -12,29 +12,34 @@ from .consts import DEFAULT_HEATER, OW_RESERVED_KEYS, UPLOAD_FIRMWARE
 class _HeaterCommand(BaseModel):
     """Base for per-channel heater commands. ``heater`` defaults to the
     configured fallback channel when a payload omits it."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
     heater: str = DEFAULT_HEATER
 
 
 class SetTemperatureData(_HeaterCommand):
     """PID setpoint -> ``pid_<heater>_<temperature>[_<sensor_group>]``."""
+
     temperature: float
     sensor_group: Optional[str] = None
 
 
 class SetPwmData(_HeaterCommand):
     """Open-loop duty -> ``pwm_<heater>_<pwm>``. Duty is a percentage 0-100."""
+
     pwm: int = Field(ge=0, le=100)
 
 
 class SetPidModeData(_HeaterCommand):
     """PID run state -> ``pid_<heater>_<mode>``."""
+
     mode: Literal["enable", "disable", "stop"]
 
 
 class ProtocolSetTemperatureData(_HeaterCommand):
     """Protocol step: drive ``heater`` to ``temperature`` (closed-loop) and ack
     once the PID temperature is within ``tolerance`` °C of it."""
+
     temperature: float
     tolerance: float = Field(ge=0)
 
@@ -44,6 +49,7 @@ class StartStreamData(_HeaterCommand):
     closed-loop PID (``pid=True``: the ``pid_<heater>_<temperature>[_<group>]``
     setpoint command starts PID and its coupled stream) or plain telemetry
     streaming — optionally re-asserting an open-loop duty on the fresh stream."""
+
     pid: bool = False
     temperature: Optional[float] = None
     sensor_group: Optional[str] = None
@@ -59,19 +65,22 @@ class StartStreamData(_HeaterCommand):
 class StopStreamData(_HeaterCommand):
     """Legacy stop_stream(): stop whichever run mode is active; optionally turn
     every output off afterwards (safety on UI stream-off)."""
+
     all_off: bool = False
 
 
 class SetStreamData(BaseModel):
     """Telemetry streaming control. ``group`` is a sensor-group name, ``all`` for
     every sensor, or ``stop`` to halt streaming."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
     group: str = "all"
 
 
 class SetFanData(BaseModel):
     """Fan control -> ``fan_on`` / ``fan_off``."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
     on: bool
 
 
@@ -79,10 +88,12 @@ class SetFanData(BaseModel):
 # Configure-sensors-and-heaters edit validation                                #
 # --------------------------------------------------------------------------- #
 
+
 class SensorNaming(BaseModel):
     """A 1-Wire sensor's editable naming: its ROM and the name it's given.
     Empty-named sensors are dropped before validation, so ``name`` is non-empty."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
     rom: str
     name: str
 
@@ -96,7 +107,8 @@ class HeaterConfigEdit(BaseModel):
       - heater assignments referencing names that aren't defined 1-Wire sensors
         or thermistors.
     """
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
     #: Named 1-Wire sensors to persist (empty names already dropped by caller).
     sensors: List[SensorNaming]
     #: heater channel -> list of assigned sensor names.
@@ -111,7 +123,8 @@ class HeaterConfigEdit(BaseModel):
         reserved = sorted({n for n in names if n in OW_RESERVED_KEYS})
         if reserved:
             raise ValueError(
-                f"Sensor name(s) cannot be reserved bus keys: {', '.join(reserved)}")
+                f"Sensor name(s) cannot be reserved bus keys: {', '.join(reserved)}"
+            )
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
             raise ValueError(f"Duplicate sensor name(s): {', '.join(dupes)}")
@@ -120,15 +133,18 @@ class HeaterConfigEdit(BaseModel):
     @model_validator(mode="after")
     def _references_exist(self):
         defined = {s.name for s in self.sensors} | set(self.thermistor_names)
-        unknown = sorted({
-            name
-            for assigned in self.assignments.values()
-            for name in assigned
-            if name and name not in defined
-        })
+        unknown = sorted(
+            {
+                name
+                for assigned in self.assignments.values()
+                for name in assigned
+                if name and name not in defined
+            }
+        )
         if unknown:
             raise ValueError(
-                f"Heater(s) reference undefined sensor(s): {', '.join(unknown)}")
+                f"Heater(s) reference undefined sensor(s): {', '.join(unknown)}"
+            )
         return self
 
 

@@ -1,13 +1,14 @@
-from traits.api import provides, Str, List
+from traits.api import List, Str, provides
 
-from peripheral_device_controller_base.services.peripheral_device_monitor_mixin_service import (
+from peripheral_device_controller_base.services.peripheral_device_monitor_mixin_service import (  # noqa: E501 -- dotted module path can't be shortened
     PeripheralDeviceMonitorMixinService,
 )
-from logger.logger_service import get_logger
 
-from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
+from ..consts import DEVICE_ID_FRAGMENT, DEVICE_NAME, HEATER_HWID
 from ..heater_serial_proxy import HeaterSerialProxy
-from ..consts import HEATER_HWID, DEVICE_NAME, DEVICE_ID_FRAGMENT
+from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
+
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -15,8 +16,9 @@ logger = get_logger(__name__)
 @provides(IHeaterControlMixinService)
 class HeaterMonitorMixinService(PeripheralDeviceMonitorMixinService):
     """Monitors for the heater controller (RP2040) connection."""
+
     id = Str(f"{DEVICE_NAME}_monitor_mixin_service")
-    name = Str(f'{DEVICE_NAME.title()} Monitor Mixin')
+    name = Str(f"{DEVICE_NAME.title()} Monitor Mixin")
 
     _default_hwids = List(Str, [HEATER_HWID])
 
@@ -31,4 +33,5 @@ class HeaterMonitorMixinService(PeripheralDeviceMonitorMixinService):
         return HeaterSerialProxy(
             port=str(port_name),
             expected_device_id_fragment=DEVICE_ID_FRAGMENT,
-            serial_instance=getattr(port_name, "serial", None))
+            serial_instance=getattr(port_name, "serial", None),
+        )

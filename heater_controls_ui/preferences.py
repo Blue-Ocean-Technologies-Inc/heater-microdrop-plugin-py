@@ -13,11 +13,12 @@ from envisage.ui.tasks.api import PreferencesCategory, PreferencesPane
 from traits.api import Bool, Directory
 from traitsui.api import Group, Item, View
 
-from microdrop_application.menus import is_advanced_mode
-from microdrop_style.text_styles import preferences_group_style_sheet
-from microdrop_utils.preferences_UI_helpers import create_item_label_group
-
 from heater_controller.compensation import HeaterCompensationPreferences
+from microdrop_application.menus import is_advanced_mode
+
+from microdrop_style.text_styles import preferences_group_style_sheet
+
+from microdrop_utils.preferences_UI_helpers import create_item_label_group
 
 
 class HeaterPreferences(HeaterCompensationPreferences):

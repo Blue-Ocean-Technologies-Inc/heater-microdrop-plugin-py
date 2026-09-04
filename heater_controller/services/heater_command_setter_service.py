@@ -1,25 +1,26 @@
 import time
 
-from traits.api import provides, Bool, HasTraits, Instance
+from traits.api import Bool, HasTraits, Instance, provides
 
 from microdrop_application.helpers import get_current_experiment_directory
 
-from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
-from ..heater_serial_proxy import HeaterSerialProxy
-from ..data_logger import heater_data_logger
 from ..consts import COMMAND_DELAY_SHORT, HEATER_LOGS_DIR_NAME
+from ..data_logger import heater_data_logger
 from ..datamodels import (
-    SetTemperatureData,
-    SetPwmData,
-    SetPidModeData,
-    SetStreamData,
-    SetFanData,
     ProtocolSetTemperatureData,
+    SetFanData,
+    SetPidModeData,
+    SetPwmData,
+    SetStreamData,
+    SetTemperatureData,
     StartStreamData,
     StopStreamData,
 )
+from ..heater_serial_proxy import HeaterSerialProxy
+from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 
 from logger.logger_service import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -39,6 +40,7 @@ class HeaterCommandSetterService(HasTraits):
         set_fan         -> fan_on | fan_off
         all_off         -> all_off
     """
+
     proxy = Instance(HeaterSerialProxy)
 
     #: True while the board runs the PID-coupled stream task — mirrors the
@@ -128,7 +130,9 @@ class HeaterCommandSetterService(HasTraits):
                 self._send(f"pid_{data.heater}_{data.temperature}")
             self._pid_active = True
         else:
-            self._send(f"stream_{data.sensor_group}" if data.sensor_group else "stream_all")
+            self._send(
+                f"stream_{data.sensor_group}" if data.sensor_group else "stream_all"
+            )
             self._pid_active = False
             if data.pwm is not None:
                 # Re-assert the staged open-loop duty on the fresh stream.
@@ -159,7 +163,9 @@ class HeaterCommandSetterService(HasTraits):
         available = self.proxy.available_heaters or []
         if available and heater not in available:
             heater = available[0]
-            logger.info(f"Protocol heater '{data.heater}' not on board; using '{heater}'")
+            logger.info(
+                f"Protocol heater '{data.heater}' not on board; using '{heater}'"
+            )
         # Closed-loop toward the target and make sure telemetry is streaming so
         # the proxy can watch the PID temperature, then arm the ack watcher.
         self._send(f"pid_{heater}_enable")
@@ -187,8 +193,9 @@ class HeaterCommandSetterService(HasTraits):
         try:
             log_dir = get_current_experiment_directory() / HEATER_LOGS_DIR_NAME
         except Exception as e:
-            logger.warning(f"No experiment directory for heater logs; "
-                           f"telemetry not logged: {e}")
+            logger.warning(
+                f"No experiment directory for heater logs; telemetry not logged: {e}"
+            )
             return
         heater_data_logger.start_new_log(log_dir)
 

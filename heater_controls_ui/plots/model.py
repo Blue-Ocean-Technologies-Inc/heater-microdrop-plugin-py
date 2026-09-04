@@ -22,6 +22,7 @@ The plot's run state also lives here so the view stays dumb:
   tick by calling :meth:`clear`, which also bumps ``revision`` so the
   following redraw autoscales the axes to whatever data has arrived since.
 """
+
 import threading
 
 from traits.api import Any, Bool, Dict, HasTraits, Instance, Int, List, Set, observe
@@ -38,17 +39,29 @@ class HeaterPlotModel(HasTraits):
     # Run state (set from the GUI; read by the canvas and the listener)    #
     # ------------------------------------------------------------------ #
 
-    paused = Bool(False, desc="Freeze the plot: no sampling ticks or redraws. "
-                              "Telemetry still updates the latest values.")
-    enabled = Bool(True, desc="False = full stop: telemetry is ignored and "
-                              "all history is cleared.")
-    hidden_series = Set(desc="Role-prefixed series keys (e.g. 'pid:tec1') "
-                             "hidden from the plot via the legend.")
-    revision = Int(0, desc="Bumped whenever the drawable buffers change; the "
-                           "canvas redraws only when this moves.")
-    clear_requested = Int(0, desc="Bumped by the view to request a view-only "
-                                  "purge of the buffered/plotted points; "
-                                  "drained by the canvas on its next tick.")
+    paused = Bool(
+        False,
+        desc="Freeze the plot: no sampling ticks or redraws. "
+        "Telemetry still updates the latest values.",
+    )
+    enabled = Bool(
+        True, desc="False = full stop: telemetry is ignored and all history is cleared."
+    )
+    hidden_series = Set(
+        desc="Role-prefixed series keys (e.g. 'pid:tec1') "
+        "hidden from the plot via the legend."
+    )
+    revision = Int(
+        0,
+        desc="Bumped whenever the drawable buffers change; the "
+        "canvas redraws only when this moves.",
+    )
+    clear_requested = Int(
+        0,
+        desc="Bumped by the view to request a view-only "
+        "purge of the buffered/plotted points; "
+        "drained by the canvas on its next tick.",
+    )
 
     # ------------------------------------------------------------------ #
     # Buffers (all access under _lock)                                     #
@@ -58,19 +71,19 @@ class HeaterPlotModel(HasTraits):
     # Python 3.12 on (a factory function before, which Traits would validate
     # against instead -- rejecting every real lock).
     _lock = Instance(type(threading.Lock()))
-    _t0 = Any(None)                 # monotonic of the first sample
+    _t0 = Any(None)  # monotonic of the first sample
     # Latest value per key (sample-and-hold between telemetry frames).
-    _latest_temps = Dict()          # sensor_name -> float
-    _latest_pid = Dict()            # heater -> float
-    _latest_pwm = Dict()            # heater -> float
+    _latest_temps = Dict()  # sensor_name -> float
+    _latest_pid = Dict()  # heater -> float
+    _latest_pwm = Dict()  # heater -> float
     # Aligned rolling series (same length as _times), None-backfilled for
     # keys that appeared partway through the window.
-    _times = List()                 # seconds since first sample
-    _sensor_series = Dict()         # sensor_name -> [float|None]
-    _pid_series = Dict()            # heater -> [float|None]
-    _pwm_series = Dict()            # heater -> [float|None]
-    _latest_setpoint = Any(None)    # current PID target (None = no target)
-    _setpoint_series = Dict()       # {"setpoint": [float|None]}
+    _times = List()  # seconds since first sample
+    _sensor_series = Dict()  # sensor_name -> [float|None]
+    _pid_series = Dict()  # heater -> [float|None]
+    _pwm_series = Dict()  # heater -> [float|None]
+    _latest_setpoint = Any(None)  # current PID target (None = no target)
+    _setpoint_series = Dict()  # {"setpoint": [float|None]}
 
     def __lock_default(self):
         return threading.Lock()
@@ -156,9 +169,11 @@ class HeaterPlotModel(HasTraits):
             self._extend(self._pwm_series, self._latest_pwm, length)
             self._extend(
                 self._setpoint_series,
-                {} if self._latest_setpoint is None
+                {}
+                if self._latest_setpoint is None
                 else {"setpoint": self._latest_setpoint},
-                length)
+                length,
+            )
             self._trim()
             self.revision += 1
 
@@ -203,7 +218,11 @@ class HeaterPlotModel(HasTraits):
         # EVERY series store must trim with _times — a store missing here
         # outgrows the x-axis once the window overflows and crashes
         # matplotlib's relim with a shape mismatch.
-        for store in (self._sensor_series, self._pid_series,
-                      self._pwm_series, self._setpoint_series):
+        for store in (
+            self._sensor_series,
+            self._pid_series,
+            self._pwm_series,
+            self._setpoint_series,
+        ):
             for key in store:
                 store[key] = store[key][cut:]

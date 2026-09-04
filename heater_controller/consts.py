@@ -1,12 +1,16 @@
 from peripheral_device_controller_base.consts import (
-    connected_topic, disconnected_topic, searching_topic,
-    upload_firmware_topic, cancel_firmware_upload_topic,
-    firmware_upload_started_topic, firmware_upload_log_topic,
+    cancel_firmware_upload_topic,
+    connected_topic,
+    disconnected_topic,
     firmware_upload_finished_topic,
+    firmware_upload_log_topic,
+    firmware_upload_started_topic,
+    searching_topic,
+    upload_firmware_topic,
 )
 
 # This module's package.
-PKG = '.'.join(__name__.split('.')[:-1])
+PKG = ".".join(__name__.split(".")[:-1])
 PKG_name = PKG.title().replace("_", " ")
 
 DEVICE_NAME = "Heater"
@@ -122,4 +126,5 @@ ACTOR_TOPIC_DICT = {
         f"{DEVICE_NAME}/requests/#",
         CONNECTED,
         DISCONNECTED,
-    ]}
+    ]
+}

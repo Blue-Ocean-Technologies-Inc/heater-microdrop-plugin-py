@@ -1,21 +1,32 @@
 """Hardware-free tests for the Configure Sensors & Heaters parsing + model."""
+
 import json
 
 import pytest
 from pydantic import ValidationError
 
-from heater_controls_ui.sensor_config.parsing import (
-    sensor_rows, heater_rows, thermistor_names, parse_board_config, RESERVED_OW_KEYS,
-    split_sensor_names, build_board_config, scan_summary,
-)
-from heater_controls_ui.sensor_config.model import SensorConfigModel
 from heater_controller.datamodels import HeaterConfigEdit, SensorNaming
-
+from heater_controls_ui.sensor_config.model import SensorConfigModel
+from heater_controls_ui.sensor_config.parsing import (
+    RESERVED_OW_KEYS,
+    build_board_config,
+    heater_rows,
+    parse_board_config,
+    scan_summary,
+    sensor_rows,
+    split_sensor_names,
+    thermistor_names,
+)
 
 CONFIG = {
     "temperature_sensors": {
-        "1-wire-sensors": {"pin": 13, "conv_mode": 4, "resolution": 16,
-                           "inlet": "28FF1111111111AA", "outlet": "28FF2222222222BB"},
+        "1-wire-sensors": {
+            "pin": 13,
+            "conv_mode": 4,
+            "resolution": 16,
+            "inlet": "28FF1111111111AA",
+            "outlet": "28FF2222222222BB",
+        },
         "thermistors": {"therm1": {"beta": 3950}},
     },
     "heaters": {
@@ -27,9 +38,10 @@ CONFIG = {
 
 # --- parsing ----------------------------------------------------------------
 
+
 def test_parse_board_config_rejects_non_json():
     assert parse_board_config("not json") is None
-    assert parse_board_config("[1, 2]") is None       # not a dict
+    assert parse_board_config("[1, 2]") is None  # not a dict
     assert parse_board_config(json.dumps(CONFIG))["heaters"]["tec1"]["type"] == "tec"
 
 
@@ -41,11 +53,17 @@ def test_sensor_rows_excludes_reserved_bus_keys():
 
 
 def test_sensor_rows_status_logic():
-    rows = {r["rom"]: r["status"] for r in sensor_rows(
-        CONFIG, scanned_roms=["28ff2222222222bb", "28ff9999999999cc"], scan_done=True)}
-    assert rows["28ff1111111111aa"] == "Missing from bus"   # in config, off bus
+    rows = {
+        r["rom"]: r["status"]
+        for r in sensor_rows(
+            CONFIG,
+            scanned_roms=["28ff2222222222bb", "28ff9999999999cc"],
+            scan_done=True,
+        )
+    }
+    assert rows["28ff1111111111aa"] == "Missing from bus"  # in config, off bus
     assert rows["28ff2222222222bb"] == "On bus + in config"  # both
-    assert rows["28ff9999999999cc"] == "New (on bus)"        # bus only
+    assert rows["28ff9999999999cc"] == "New (on bus)"  # bus only
 
 
 def test_sensor_rows_in_config_before_scan():
@@ -60,32 +78,34 @@ def test_scan_summary_before_scan_is_blank():
 def test_scan_summary_matched_new_and_missing():
     # inlet matched, outlet missing, one brand-new ROM on the bus.
     summary = scan_summary(
-        CONFIG, ["28ff1111111111aa", "28ff9999999999cc"], scan_done=True)
+        CONFIG, ["28ff1111111111aa", "28ff9999999999cc"], scan_done=True
+    )
     assert summary == (
-        "Scan complete: 2 on bus (1 matched, 1 new). "
-        "1 config entry not found on bus.")
+        "Scan complete: 2 on bus (1 matched, 1 new). 1 config entry not found on bus."
+    )
 
 
 def test_scan_summary_all_matched_no_missing():
     summary = scan_summary(
-        CONFIG, ["28ff1111111111aa", "28ff2222222222bb"], scan_done=True)
+        CONFIG, ["28ff1111111111aa", "28ff2222222222bb"], scan_done=True
+    )
     assert summary == "Scan complete: 2 on bus (2 matched, 0 new)."
 
 
 def test_scan_summary_none_found_reports_all_missing():
     summary = scan_summary(CONFIG, [], scan_done=True)
     assert summary == (
-        "Scan complete: 0 on bus (0 matched, 0 new). "
-        "2 config entries not found on bus.")
+        "Scan complete: 0 on bus (0 matched, 0 new). 2 config entries not found on bus."
+    )
 
 
 def test_model_sets_and_clears_scan_summary():
     m = SensorConfigModel()
     assert m.load_config_text(json.dumps(CONFIG)) is True
-    assert m.scan_summary == ""                       # no scan yet
+    assert m.scan_summary == ""  # no scan yet
     m.set_scanned_roms(["28ff1111111111aa", "28ff9999999999cc"])
     assert m.scan_summary.startswith("Scan complete: 2 on bus (1 matched, 1 new)")
-    m.load_config_text(json.dumps(CONFIG))            # fresh config clears it
+    m.load_config_text(json.dumps(CONFIG))  # fresh config clears it
     assert m.scan_summary == ""
 
 
@@ -106,6 +126,7 @@ def test_empty_config_yields_no_rows():
 
 
 # --- model ------------------------------------------------------------------
+
 
 def test_model_load_config_builds_rows():
     m = SensorConfigModel()
@@ -144,9 +165,9 @@ def test_refresh_updates_rows_in_place():
     changed["temperature_sensors"]["1-wire-sensors"]["probe"] = "28FF1111111111AA"
     changed["heaters"]["tec1"]["sensors"] = ["probe"]
     m.load_config_text(json.dumps(changed))
-    assert m.sensors[0] is inlet or inlet in m.sensors          # reused, not replaced
+    assert m.sensors[0] is inlet or inlet in m.sensors  # reused, not replaced
     assert next(r for r in m.sensors if r.rom == "28ff1111111111aa").name == "probe"
-    assert tec.sensors == "probe"                                # heater row updated in place
+    assert tec.sensors == "probe"  # heater row updated in place
 
 
 def test_refresh_resets_scan_status_to_in_config():
@@ -156,7 +177,7 @@ def test_refresh_resets_scan_status_to_in_config():
     m.load_config_text(json.dumps(CONFIG))
     m.set_scanned_roms(["28ff1111111111aa"])
     assert any(r.status == "On bus + in config" for r in m.sensors)
-    m.load_config_text(json.dumps(CONFIG))           # refresh from board
+    m.load_config_text(json.dumps(CONFIG))  # refresh from board
     assert m.scan_done is False and m.scanned_roms == []
     assert all(r.status == "In config" for r in m.sensors)
 
@@ -165,9 +186,9 @@ def test_scan_preserves_name_edits():
     m = SensorConfigModel()
     m.load_config_text(json.dumps(CONFIG))
     inlet = next(r for r in m.sensors if r.rom == "28ff1111111111aa")
-    inlet.name = "edited"                       # user is mid-edit
-    m.set_scanned_roms(["28ff1111111111aa"])    # a scan happens
-    assert inlet.name == "edited"               # name edit kept across the scan
+    inlet.name = "edited"  # user is mid-edit
+    m.set_scanned_roms(["28ff1111111111aa"])  # a scan happens
+    assert inlet.name == "edited"  # name edit kept across the scan
     assert inlet.status == "On bus + in config"  # status still refreshed
 
 
@@ -183,10 +204,13 @@ def test_model_scan_updates_status():
 
 # --- edit validation (Phase 2) ----------------------------------------------
 
+
 def _edit(sensors, assignments, therms=("therm1",)):
     return HeaterConfigEdit(
         sensors=[SensorNaming(rom=r, name=n) for r, n in sensors],
-        assignments=assignments, thermistor_names=list(therms))
+        assignments=assignments,
+        thermistor_names=list(therms),
+    )
 
 
 def test_valid_edit_passes():
@@ -210,20 +234,21 @@ def test_unknown_reference_rejected():
 
 # --- config build (Phase 2) -------------------------------------------------
 
+
 def test_split_sensor_names():
     assert split_sensor_names("a, b ,, c ") == ["a", "b", "c"]
     assert split_sensor_names("") == []
 
 
 def test_build_board_config_renames_drops_and_preserves():
-    named = [("28ff1111111111aa", "in1")]            # 'outlet' omitted -> removed
+    named = [("28ff1111111111aa", "in1")]  # 'outlet' omitted -> removed
     assignments = {"tec1": ["in1", "therm1"], "res1": ["outlet"]}
     new = build_board_config(CONFIG, named, assignments)
     ow = new["temperature_sensors"]["1-wire-sensors"]
-    assert ow["pin"] == 13 and ow["resolution"] == 16      # reserved keys kept
+    assert ow["pin"] == 13 and ow["resolution"] == 16  # reserved keys kept
     assert "in1" in ow and "inlet" not in ow and "outlet" not in ow
     assert new["temperature_sensors"]["thermistors"] == {"therm1": {"beta": 3950}}
-    assert new["heaters"]["tec1"]["type"] == "tec"         # type preserved
+    assert new["heaters"]["tec1"]["type"] == "tec"  # type preserved
     assert new["heaters"]["tec1"]["sensors"] == ["in1", "therm1"]
     # original config object is not mutated
     assert "inlet" in CONFIG["temperature_sensors"]["1-wire-sensors"]

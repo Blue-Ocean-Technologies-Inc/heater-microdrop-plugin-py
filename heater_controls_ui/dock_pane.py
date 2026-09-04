@@ -1,24 +1,29 @@
-from traits.api import observe, Instance
 from pyface.qt.QtCore import Qt
+from traits.api import Instance, observe
 
-from template_status_and_controls.base_dock_pane import (
-    BaseStatusDockPane, build_status_icon_tooltip, status_bar_icon_font)
-from microdrop_style.icons.icons import ICON_MODE_HEAT
-from microdrop_utils.pyside_helpers import ClickableLabel
-from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from microdrop_application.dialogs.pyface_wrapper import information
-from logger.logger_service import get_logger
+from template_status_and_controls.base_dock_pane import (
+    BaseStatusDockPane,
+    build_status_icon_tooltip,
+    status_bar_icon_font,
+)
 
-from .preferences import HeaterPreferences
+from microdrop_style.icons.icons import ICON_MODE_HEAT
 
-from .consts import PKG, PKG_name, listener_name, START_DEVICE_MONITORING, DUMP_CONFIG
-from .model import HeaterStatusModel
+from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
+from microdrop_utils.pyside_helpers import ClickableLabel
+
+from .consts import DUMP_CONFIG, PKG, START_DEVICE_MONITORING, PKG_name, listener_name
 from .controller import HeaterControlsController
-from .view import UnifiedView
 from .message_handler import HeaterMessageHandler
-from .sensor_config.model import SensorConfigModel
+from .model import HeaterStatusModel
+from .preferences import HeaterPreferences
 from .sensor_config.controller import SensorConfigController
+from .sensor_config.model import SensorConfigModel
 from .sensor_config.view import SensorConfigView
+from .view import UnifiedView
+
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -59,7 +64,8 @@ class HeaterStatusDockPane(BaseStatusDockPane):
 
     def _create_message_handler(self) -> HeaterMessageHandler:
         return HeaterMessageHandler(
-            model=self.model, config_model=self.sensor_config_model, name=listener_name)
+            model=self.model, config_model=self.sensor_config_model, name=listener_name
+        )
 
     # ------------------------------------------------------------------ #
     # Tools ▸ Heater ▸ Configure Sensors & Heaters (opened via DockPaneAction) #
@@ -68,14 +74,18 @@ class HeaterStatusDockPane(BaseStatusDockPane):
         """Open the modal configure dialog and refresh its data from the board."""
         publish_message(topic=DUMP_CONFIG, message="")
         self.sensor_config_model.edit_traits(
-            view=SensorConfigView, handler=SensorConfigController())
+            view=SensorConfigView, handler=SensorConfigController()
+        )
 
     # ------------------------------------------------------------------ #
     # "Applies when streaming starts" warning (setpoint edited, stream off) #
     # ------------------------------------------------------------------ #
     @observe("model:stream_off_edit_warning", dispatch="ui")
     def _warn_edit_stream_off(self, event):
-        if self.heater_preferences is None or not self.heater_preferences.heater_show_stream_off_warning:
+        if (
+            self.heater_preferences is None
+            or not self.heater_preferences.heater_show_stream_off_warning
+        ):
             return
 
         if not self.model.stream_active:
@@ -95,7 +105,7 @@ class HeaterStatusDockPane(BaseStatusDockPane):
                 checkbox_text="Don't show this again",
             )
         else:
-            return   # streaming with PID on: nothing staged, no dialog
+            return  # streaming with PID on: nothing staged, no dialog
 
         # With checkbox_text, information() returns (result, checked).
         if isinstance(result, tuple) and result[1]:
@@ -129,8 +139,9 @@ class HeaterStatusDockPane(BaseStatusDockPane):
                 (self.model.CONNECTED_COLOR, "Connected"),
                 (self.model.HALTED_COLOR, "Halted (Fault)"),
             ],
-            hint="Searching for device…" if self.model.searching
-                 else "Click to search for a connection.",
+            hint="Searching for device…"
+            if self.model.searching
+            else "Click to search for a connection.",
         )
 
     # ------------------------------------------------------------------ #
@@ -151,6 +162,8 @@ class HeaterStatusDockPane(BaseStatusDockPane):
         no scan is currently active — and flip the tooltip to match."""
         if self.status_bar_icon is not None:
             self.status_bar_icon.setCursor(
-                Qt.CursorShape.ArrowCursor if self.model.searching
-                else Qt.CursorShape.PointingHandCursor)
+                Qt.CursorShape.ArrowCursor
+                if self.model.searching
+                else Qt.CursorShape.PointingHandCursor
+            )
         self._refresh_status_bar_tooltip()

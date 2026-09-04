@@ -2,19 +2,21 @@ import json
 
 from traits.api import Instance
 
-from template_status_and_controls.base_message_handler import BaseMessageHandler
-from logger.logger_service import get_logger
-
 from heater_controller.compensation import HeaterCompensationPreferences
 from heater_controller.consts import (
-    FIRMWARE_UPLOAD_FINISHED, FIRMWARE_UPLOAD_LOG, FIRMWARE_UPLOAD_STARTED,
+    FIRMWARE_UPLOAD_FINISHED,
+    FIRMWARE_UPLOAD_LOG,
+    FIRMWARE_UPLOAD_STARTED,
 )
+from template_status_and_controls.base_message_handler import BaseMessageHandler
 
-from .consts import PWM_MIN, PWM_MAX
+from .consts import PWM_MAX, PWM_MIN
 from .live_state import heater_live_state
 from .model import HeaterStatusModel
 from .sensor_config.model import SensorConfigModel
-from .telemetry import resolve_selection, format_telemetry
+from .telemetry import format_telemetry, resolve_selection
+
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -62,9 +64,9 @@ class HeaterMessageHandler(BaseMessageHandler):
             logger.error(f"Unparseable board id payload: {body!r}")
             return
         self.model.board_id_text = str(
-            identity.get("device_id") or identity.get("uid") or "unknown")
-        heater_live_state.board_device_id = str(
-            identity.get("device_id") or "")
+            identity.get("device_id") or identity.get("uid") or "unknown"
+        )
+        heater_live_state.board_device_id = str(identity.get("device_id") or "")
 
     def _on_advanced_mode_change_triggered(self, body):
         """Operator toggled Advanced Mode. Setpoint compensation is an
@@ -80,8 +82,7 @@ class HeaterMessageHandler(BaseMessageHandler):
     def _on_firmware_upload_started_triggered(self, body):
         """Backend accepted an upload — ferry to the GUI thread via live_state
         (the dialog's dispatch="ui" observer applies it)."""
-        heater_live_state.firmware_upload_message = (
-            FIRMWARE_UPLOAD_STARTED, body)
+        heater_live_state.firmware_upload_message = (FIRMWARE_UPLOAD_STARTED, body)
 
     def _on_firmware_upload_log_triggered(self, body):
         """One uploader progress line — ferry to the GUI thread."""
@@ -89,12 +90,13 @@ class HeaterMessageHandler(BaseMessageHandler):
 
     def _on_firmware_upload_finished_triggered(self, body):
         """Upload outcome — ferry to the GUI thread."""
-        heater_live_state.firmware_upload_message = (
-            FIRMWARE_UPLOAD_FINISHED, body)
+        heater_live_state.firmware_upload_message = (FIRMWARE_UPLOAD_FINISHED, body)
 
     def _on_config_dumped_triggered(self, body):
         """Full dump_config JSON document → the configurator model."""
-        if self.config_model is not None and not self.config_model.load_config_text(body):
+        if self.config_model is not None and not self.config_model.load_config_text(
+            body
+        ):
             logger.error("Failed to parse dumped heater config")
 
     def _on_sensors_scanned_triggered(self, body):
@@ -158,9 +160,9 @@ class HeaterMessageHandler(BaseMessageHandler):
         heater, updates = format_telemetry(data, pid_mode=self.model.pid_enabled)
         if updates:
             if heater is None:
-                self.model.trait_set(**updates)        # global readouts
+                self.model.trait_set(**updates)  # global readouts
             else:
-                readout = self._readout_for(heater)    # per-heater row
+                readout = self._readout_for(heater)  # per-heater row
                 if readout is not None:
                     readout.trait_set(**updates)
 
@@ -202,10 +204,12 @@ class HeaterMessageHandler(BaseMessageHandler):
         try:
             self.model.pid_enabled = enabled
             if enabled:
-                self.model.mode = "Temp"   # PID owns the temperature loop
+                self.model.mode = "Temp"  # PID owns the temperature loop
         finally:
             self.model.updating_from_board = False
-        logger.info(f"Heater UI: board reports PID {'started' if enabled else 'stopped'}")
+        logger.info(
+            f"Heater UI: board reports PID {'started' if enabled else 'stopped'}"
+        )
 
     def _readout_for(self, name):
         """The HeaterReadout row for ``name``, or None if not yet known (the

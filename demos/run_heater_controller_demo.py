@@ -11,33 +11,38 @@ Run (heater plugged in over USB):
 Requires Redis (started here via redis_server_context) and a heater on
 VID:PID=2E8A:0005. Without the heater, the monitor just keeps polling.
 """
+
 # sys imports
 import os
 import sys
-import time
 import threading
+import time
 
 # enthought imports
 from envisage.api import CorePlugin
 from envisage.application import Application
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # plugin imports
 import json
 
-from heater_controller.plugin import HeaterControllerPlugin
 from heater_controller.consts import (
-    START_DEVICE_MONITORING,
     SEND_COMMAND,
-    SET_TEMPERATURE,
     SET_PWM,
+    SET_TEMPERATURE,
+    START_DEVICE_MONITORING,
 )
+from heater_controller.plugin import HeaterControllerPlugin
 from message_router.plugin import MessageRouterPlugin
 
 # local helpers imports
-from microdrop_utils.broker_server_helpers import dramatiq_workers_context, redis_server_context
+from microdrop_utils.broker_server_helpers import (
+    dramatiq_workers_context,
+    redis_server_context,
+)
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
+
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
@@ -62,7 +67,9 @@ def _demo_traffic():
 
     time.sleep(2)
     logger.info("Demo: setting tec1 PID setpoint to 40C")
-    publish_message(message=json.dumps({"heater": "tec1", "temperature": 40}), topic=SET_TEMPERATURE)
+    publish_message(
+        message=json.dumps({"heater": "tec1", "temperature": 40}), topic=SET_TEMPERATURE
+    )
 
 
 def main(args):
@@ -80,7 +87,10 @@ def main(args):
         # Drive monitoring + a sample command off the main thread.
         threading.Thread(target=_demo_traffic, daemon=True).start()
 
-        logger.info("Heater demo running. Watch the logs for HEATER RX / TELEMETRY. Ctrl+C to quit.")
+        logger.info(
+            "Heater demo running. Watch the logs for HEATER RX / TELEMETRY. "
+            "Ctrl+C to quit."
+        )
         try:
             while True:
                 time.sleep(1)

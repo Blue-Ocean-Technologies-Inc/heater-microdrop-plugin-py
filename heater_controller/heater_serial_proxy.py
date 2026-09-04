@@ -1,28 +1,29 @@
 import json
 import re
-import time
 import threading
+import time
 
 import serial
 
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
-from logger.logger_service import get_logger, debug_throttled
 
-from .data_logger import heater_data_logger
 from .consts import (
+    BOARD_BAUDRATE,
+    BOARD_ID,
+    CONFIG_BEGIN,
+    CONFIG_DUMPED,
+    CONFIG_END,
+    CONFIG_ERROR_PREFIX,
     CONNECTED,
     DISCONNECTED,
     HEATERS_AVAILABLE,
-    TELEMETRY,
-    BOARD_ID,
-    CONFIG_DUMPED,
     SENSORS_SCANNED,
+    TELEMETRY,
     TEMPERATURE_REACHED,
-    BOARD_BAUDRATE,
-    CONFIG_BEGIN,
-    CONFIG_END,
-    CONFIG_ERROR_PREFIX,
 )
+from .data_logger import heater_data_logger
+
+from logger.logger_service import debug_throttled, get_logger
 
 logger = get_logger(__name__)
 
@@ -59,8 +60,13 @@ class HeaterSerialProxy:
     MAX_COMMAND_RETRIES = 3
     COMMAND_RETRY_DELAY = 0.5
 
-    def __init__(self, port, baudrate=BOARD_BAUDRATE,
-                 expected_device_id_fragment=None, serial_instance=None):
+    def __init__(
+        self,
+        port,
+        baudrate=BOARD_BAUDRATE,
+        expected_device_id_fragment=None,
+        serial_instance=None,
+    ):
         self.port = port
         self.baudrate = baudrate
         # When set, a connect-time WHOAMI whose device_id lacks this fragment
@@ -113,7 +119,9 @@ class HeaterSerialProxy:
             self.serial_port.reset_input_buffer()
             self.serial_port.reset_output_buffer()
         except Exception as e:
-            logger.debug(f"Could not flush heater serial buffers (may be expected): {e}")
+            logger.debug(
+                f"Could not flush heater serial buffers (may be expected): {e}"
+            )
 
         self.reader_thread = threading.Thread(target=self._serial_reader, daemon=True)
         self.reader_thread.start()
@@ -149,7 +157,7 @@ class HeaterSerialProxy:
                     continue  # read timeout → loop again
 
                 try:
-                    line = raw.decode(errors='ignore').strip()
+                    line = raw.decode(errors="ignore").strip()
                 except UnicodeDecodeError:
                     continue
                 if not line:
@@ -161,16 +169,19 @@ class HeaterSerialProxy:
                         logger.warning(f"Heater telemetry could not be parsed: {line}")
                     elif frame == WHOAMI_FRAME:
                         # Board identity from the connect-time whoami probe.
-                        device_id = (pkt.get("device_id", "")
-                                     if isinstance(pkt, dict) else "")
-                        if (self._expected_device_id_fragment
-                                and self._expected_device_id_fragment
-                                not in device_id):
+                        device_id = (
+                            pkt.get("device_id", "") if isinstance(pkt, dict) else ""
+                        )
+                        if (
+                            self._expected_device_id_fragment
+                            and self._expected_device_id_fragment not in device_id
+                        ):
                             logger.warning(
                                 f"Heater proxy on {self.port} got WHOAMI "
                                 f"device_id '{device_id}' — expected a "
                                 f"'{self._expected_device_id_fragment}' "
-                                f"board; relinquishing the port")
+                                f"board; relinquishing the port"
+                            )
                             # terminate() is a silent teardown: publish the
                             # disconnect ourselves so the monitor resumes
                             # its search.
@@ -183,8 +194,10 @@ class HeaterSerialProxy:
                         # Throttled: telemetry frames arrive ~1/s per frame
                         # type and would otherwise dominate the debug log.
                         debug_throttled(
-                            logger, f"Heater telemetry:{frame}",
-                            f"HEATER TELEMETRY [{frame}]: {pkt}")
+                            logger,
+                            f"Heater telemetry:{frame}",
+                            f"HEATER TELEMETRY [{frame}]: {pkt}",
+                        )
                         publish_message(json.dumps(pkt), TELEMETRY)
                         # Telemetry log collection (port of the legacy UI's
                         # DataLogger); a no-op unless the command service
@@ -196,10 +209,7 @@ class HeaterSerialProxy:
                 elif self._route_scan_line(line):
                     continue  # consumed by the scan capture
                 else:
-                    debug_throttled(
-                        logger, "Heater RX",
-                        f"HEATER RX: {line}"
-                    )
+                    debug_throttled(logger, "Heater RX", f"HEATER RX: {line}")
 
         except (OSError, serial.SerialException) as e:
             if not self._stop_reader.is_set():
@@ -244,7 +254,9 @@ class HeaterSerialProxy:
 
         heaters = self.parse_heaters_from_config(config_text)
         if heaters is None:
-            logger.warning("Could not parse heater config; available heaters not published")
+            logger.warning(
+                "Could not parse heater config; available heaters not published"
+            )
             return
         self.available_heaters = heaters
         logger.info(f"Heater channels available: {heaters}")
@@ -295,8 +307,7 @@ class HeaterSerialProxy:
             "target": float(target),
             "tolerance": float(tolerance),
         }
-        logger.info(
-            f"Heater protocol watch armed: {heater} -> {target}±{tolerance} °C")
+        logger.info(f"Heater protocol watch armed: {heater} -> {target}±{tolerance} °C")
 
     def clear_temperature_target(self):
         self._temp_watch = None
@@ -307,7 +318,7 @@ class HeaterSerialProxy:
         watch = self._temp_watch
         if watch is None or not frame.startswith("PID_"):
             return
-        if frame[len("PID_"):].lower() != watch["heater"]:
+        if frame[len("PID_") :].lower() != watch["heater"]:
             return
         temp = pkt.get("pid_temperature")
         if not isinstance(temp, (int, float)):
@@ -316,10 +327,12 @@ class HeaterSerialProxy:
             self._temp_watch = None
             logger.info(
                 f"Heater {watch['heater']} reached {temp} °C "
-                f"(target {watch['target']}±{watch['tolerance']})")
+                f"(target {watch['target']}±{watch['tolerance']})"
+            )
             publish_message(
                 json.dumps({"heater": watch["heater"], "temperature": temp}),
-                TEMPERATURE_REACHED)
+                TEMPERATURE_REACHED,
+            )
 
     @staticmethod
     def parse_heaters_from_config(config_text):
@@ -343,16 +356,16 @@ class HeaterSerialProxy:
         object and is tagged onto the dict as ``_frame``. Returns ``(frame, None)``
         when the line carries no/invalid JSON object.
         """
-        json_start = line.find('{')
+        json_start = line.find("{")
         if json_start == -1:
-            return line[len(TELEMETRY_MARKER):], None
-        frame = line[len(TELEMETRY_MARKER):json_start]
+            return line[len(TELEMETRY_MARKER) :], None
+        frame = line[len(TELEMETRY_MARKER) : json_start]
         try:
             pkt = json.loads(line[json_start:])
         except Exception:
             return frame, None
         if isinstance(pkt, dict):
-            pkt['_frame'] = frame
+            pkt["_frame"] = frame
         return frame, pkt
 
     # ------------------------------------------------------------------
@@ -365,8 +378,8 @@ class HeaterSerialProxy:
             raise RuntimeError("Heater serial port not open")
 
         if isinstance(command, str):
-            if not command.endswith('\n'):
-                command = command + '\n'
+            if not command.endswith("\n"):
+                command = command + "\n"
             command = command.encode()
 
         logger.debug(f"HEATER TX: {command}")
@@ -380,7 +393,9 @@ class HeaterSerialProxy:
                     logger.error(f"Error sending heater command after retries: {e}")
                     raise
                 logger.warning(
-                    f"Heater command failed (attempt {attempt + 1}/{self.MAX_COMMAND_RETRIES}): {e}")
+                    f"Heater command failed (attempt "
+                    f"{attempt + 1}/{self.MAX_COMMAND_RETRIES}): {e}"
+                )
                 time.sleep(self.COMMAND_RETRY_DELAY)
 
     # ------------------------------------------------------------------
@@ -393,8 +408,11 @@ class HeaterSerialProxy:
         self._stop_reader.set()
         # The wrong-board WHOAMI guard calls terminate() from the reader
         # thread itself, which must not join itself.
-        if (self.reader_thread and self.reader_thread.is_alive()
-                and threading.current_thread() is not self.reader_thread):
+        if (
+            self.reader_thread
+            and self.reader_thread.is_alive()
+            and threading.current_thread() is not self.reader_thread
+        ):
             self.reader_thread.join(timeout=1.0)
         try:
             if self.serial_port and self.serial_port.is_open:

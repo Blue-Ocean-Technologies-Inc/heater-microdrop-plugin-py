@@ -26,7 +26,7 @@ def heater_from_frame(frame):
     """The heater a ``PID_<HEATER>`` telemetry frame belongs to (e.g.
     ``PID_HEATER1`` -> ``heater1``), or None for frames that aren't per-heater."""
     if frame.startswith("PID_"):
-        return frame[len("PID_"):].lower()
+        return frame[len("PID_") :].lower()
     return None
 
 
@@ -59,8 +59,11 @@ def telemetry_samples(data):
     out = {}
     temps = data.get("temperatures") or {}
     if isinstance(temps, dict):
-        clean = {name: float(value) for name, value in temps.items()
-                 if isinstance(value, (int, float)) and value > INVALID_TEMP_THRESHOLD}
+        clean = {
+            name: float(value)
+            for name, value in temps.items()
+            if isinstance(value, (int, float)) and value > INVALID_TEMP_THRESHOLD
+        }
         if clean:
             out["temperatures"] = clean
 

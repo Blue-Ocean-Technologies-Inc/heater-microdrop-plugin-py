@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
 # Standard library imports
+import asyncio
+import importlib
+import io
+import json
+import logging
 import os
 import re
-import io
 import sys
-import json
-import time
-import asyncio
-import logging
 import threading
-import importlib
-
-from pathlib import Path
+import time
 from contextlib import redirect_stdout
+from pathlib import Path
+
+import serial
+import serial.tools.list_ports
 
 # Third-party imports
 import yaml
-import serial
-import serial.tools.list_ports
 from bleak import BleakClient, BleakScanner
 
 # Local application imports
@@ -25,15 +25,19 @@ from fail_safe import fail_safe
 from PySide6.QtCore import QObject, Signal, Slot
 
 # Silence bleak debug messages
-logging.getLogger('bleak').setLevel(logging.WARNING)
+logging.getLogger("bleak").setLevel(logging.WARNING)
 
 serial_echo = logging.getLogger("telemetry")
-serial_echo.setLevel(logging.INFO)          # will only print json packets
+serial_echo.setLevel(logging.INFO)  # will only print json packets
 
 # UART UUIDs used by the BLE UART service
 UART_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
-UART_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # Write to this characteristic (device RX)
-UART_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # Read from this characteristic (device TX)
+UART_RX_CHAR_UUID = (
+    "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # Write to this characteristic (device RX)
+)
+UART_TX_CHAR_UUID = (
+    "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # Read from this characteristic (device TX)
+)
 
 
 class Board(QObject):
@@ -41,9 +45,13 @@ class Board(QObject):
     connection_changed = Signal(bool)
     status_message = Signal(str)
     upload_progress = Signal(int, int)  # (current_file, total_files)
-    upload_file_progress = Signal(int, int, str)  # (current_bytes, total_bytes, filename)
+    upload_file_progress = Signal(
+        int, int, str
+    )  # (current_bytes, total_bytes, filename)
     reconnect_signal = Signal()  # New signal to trigger reconnection
-    callback_signal = Signal(bool, object)  # New signal for callbacks (success, callback_func)
+    callback_signal = Signal(
+        bool, object
+    )  # New signal for callbacks (success, callback_func)
     telemetry = Signal(dict)
     message_received = Signal(str)
     # Connection modes
@@ -54,7 +62,9 @@ class Board(QObject):
     DEFAULT_BAUDRATE = 115200
     SERIAL_TIMEOUT = 2.0
     SERIAL_WRITE_TIMEOUT = 2.0
-    MESSAGE_TIMEOUT = 0.5  # Seconds to wait for more data before considering a message complete
+    MESSAGE_TIMEOUT = (
+        0.5  # Seconds to wait for more data before considering a message complete
+    )
     MAX_COMMAND_RETRIES = 3
     DEFAULT_CONNECTION_TIMEOUT = 10.0
     SHORT_CONNECTION_TIMEOUT = 4.0
@@ -72,16 +82,28 @@ class Board(QObject):
     RECEIVE_BUFFER_THRESHOLD = 500
     EVENT_LOOP_FUTURE_TIMEOUT = 10.0
     CONNECTION_THREAD_JOIN_TIMEOUT = 3.0
-    SERIAL_VID_PID_PATTERN = r'(?:vid:pid=?|vid[_:]?)(?P<vid>[0-9a-f]+)(?:(?:[_&:=+]?)|(?:[_&:=+]?pid[_:]))(?P<pid>[0-9a-f]+)'
+    SERIAL_VID_PID_PATTERN = (
+        r"(?:vid:pid=?|vid[_:]?)(?P<vid>[0-9a-f]+)"
+        r"(?:(?:[_&:=+]?)|(?:[_&:=+]?pid[_:]))(?P<pid>[0-9a-f]+)"
+    )
 
-    def __init__(self, addr, port=None, baudrate=115200,
-                 characteristic_uuid=None, logger=None,
-                 connection_mode=None, config_path='config.yml', device_name="Controller"):
+    def __init__(
+        self,
+        addr,
+        port=None,
+        baudrate=115200,
+        characteristic_uuid=None,
+        logger=None,
+        connection_mode=None,
+        config_path="config.yml",
+        device_name="Controller",
+    ):
         """Initialize the controller for Bluetooth or Serial communication
-        
+
         Args:
             addr: Bluetooth device address or serial port name
-            port: Serial port name (used when connection_mode is explicitly set to serial)
+            port: Serial port name (used when connection_mode is explicitly set
+                to serial)
             baudrate: Serial baudrate when in serial mode, ignored for Bluetooth
             characteristic_uuid: UUID for the Bluetooth write characteristic
             logger: Logger instance
@@ -102,7 +124,7 @@ class Board(QObject):
         self._loop_lock = threading.Lock()  # Add lock for event loop access
         self.config_path = config_path
         self.device_name = device_name
-        
+
         # Serial device identifiers
         self.vid = None  # Vendor ID
         self.pid = None  # Product ID
@@ -142,7 +164,7 @@ class Board(QObject):
         Returns:
             bool: True if address is a Bluetooth UUID, False otherwise
         """
-        return len(address) == 36 and address.count('-') == 4
+        return len(address) == 36 and address.count("-") == 4
 
     def _is_bluetooth_mac(self, address):
         """Check if an address is a Bluetooth MAC address format.
@@ -153,7 +175,7 @@ class Board(QObject):
         Returns:
             bool: True if address is a Bluetooth MAC, False otherwise
         """
-        return len(address) == 17 and address.count(':') == 5
+        return len(address) == 17 and address.count(":") == 5
 
     def _create_serial_port(self, port, baudrate, timeout=None, write_timeout=None):
         """Create a serial port connection with standard settings.
@@ -177,7 +199,7 @@ class Board(QObject):
                 port=port,
                 baudrate=int(baudrate),
                 timeout=timeout,
-                writeTimeout=write_timeout
+                writeTimeout=write_timeout,
             )
         except Exception as e:
             self.logger.error(f"Error creating serial port {port}: {e}")
@@ -231,15 +253,25 @@ class Board(QObject):
             self.logger.info("Reconnecting from signal request")
 
             # If we were previously connected in serial mode, reopen that specific port
-            if self.connection_mode == self.MODE_SERIAL and hasattr(self, 'serial_port') and self.serial_port:
-                port_to_use = self.serial_port.port if hasattr(self.serial_port, 'port') else self.address
+            if (
+                self.connection_mode == self.MODE_SERIAL
+                and hasattr(self, "serial_port")
+                and self.serial_port
+            ):
+                port_to_use = (
+                    self.serial_port.port
+                    if hasattr(self.serial_port, "port")
+                    else self.address
+                )
 
                 # Extra logging
-                self.logger.info(f"Reopening serial port {port_to_use} at {self.baudrate} baud")
+                self.logger.info(
+                    f"Reopening serial port {port_to_use} at {self.baudrate} baud"
+                )
                 self.status_message.emit(f"Reconnecting to {port_to_use}...")
 
                 # Close the serial port if it's open
-                if hasattr(self.serial_port, 'is_open') and self.serial_port.is_open:
+                if hasattr(self.serial_port, "is_open") and self.serial_port.is_open:
                     self.serial_port.close()
 
                 # Try to reopen the port with a small delay
@@ -266,7 +298,7 @@ class Board(QObject):
     @Slot(bool, object)
     def _callback_slot(self, success, callback_func):
         """Slot to safely execute callbacks on the main thread
-        
+
         Args:
             success: Success status to pass to the callback
             callback_func: The callback function to call
@@ -281,15 +313,15 @@ class Board(QObject):
         """Load device identifiers from config file"""
         try:
             if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as file:
+                with open(self.config_path, "r") as file:
                     config = yaml.safe_load(file)
 
-                if config and 'serial' in config:
-                    if 'vid' in config['serial']:
-                        self.vid = config['serial']['vid']
+                if config and "serial" in config:
+                    if "vid" in config["serial"]:
+                        self.vid = config["serial"]["vid"]
                         self.logger.debug(f"Loaded VID from config: {self.vid}")
-                    if 'pid' in config['serial']:
-                        self.pid = config['serial']['pid']
+                    if "pid" in config["serial"]:
+                        self.pid = config["serial"]["pid"]
                         self.logger.debug(f"Loaded PID from config: {self.pid}")
         except Exception as e:
             self.logger.error(f"Error loading device IDs from config: {e}")
@@ -299,30 +331,32 @@ class Board(QObject):
         try:
             config = {}
             if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as file:
+                with open(self.config_path, "r") as file:
                     config = yaml.safe_load(file) or {}
 
             # Create serial section if it doesn't exist
-            if 'serial' not in config:
-                config['serial'] = {}
+            if "serial" not in config:
+                config["serial"] = {}
 
             # Update VID/PID
             if self.vid is not None:
-                config['serial']['vid'] = self.vid
+                config["serial"]["vid"] = self.vid
             if self.pid is not None:
-                config['serial']['pid'] = self.pid
+                config["serial"]["pid"] = self.pid
 
             # Save the updated config
-            with open(self.config_path, 'w') as file:
+            with open(self.config_path, "w") as file:
                 yaml.dump(config, file, default_flow_style=False)
 
-            self.logger.info(f"Saved device IDs to config: VID={self.vid}, PID={self.pid}")
+            self.logger.info(
+                f"Saved device IDs to config: VID={self.vid}, PID={self.pid}"
+            )
         except Exception as e:
             self.logger.error(f"Error saving device IDs to config: {e}")
 
     def _get_event_loop(self):
         """Get a new event loop or create one if it doesn't exist
-        
+
         Returns:
             asyncio.AbstractEventLoop: The event loop to use
         """
@@ -333,7 +367,7 @@ class Board(QObject):
 
     def _run_coroutine(self, coroutine, wait_for_result=True):
         """Safely run a coroutine in the event loop
-        
+
         Args:
             coroutine: The coroutine to run
             wait_for_result: If False, schedule the coroutine and return immediately.
@@ -352,17 +386,22 @@ class Board(QObject):
             # We can't use run_until_complete in a running loop
             future = asyncio.run_coroutine_threadsafe(coroutine, loop)
             if wait_for_result:
-                # self.logger.debug("Event loop already running, using future and waiting for result")
-                return future.result(self.EVENT_LOOP_FUTURE_TIMEOUT)  # Wait up to EVENT_LOOP_FUTURE_TIMEOUT seconds for result
+                # self.logger.debug("Event loop already running, using future
+                # and waiting for result")
+                return future.result(
+                    self.EVENT_LOOP_FUTURE_TIMEOUT
+                )  # Wait up to EVENT_LOOP_FUTURE_TIMEOUT seconds for result
             else:
-                self.logger.debug("Event loop already running, scheduling coroutine without waiting")
+                self.logger.debug(
+                    "Event loop already running, scheduling coroutine without waiting"
+                )
                 return None
         else:
             return loop.run_until_complete(coroutine)
 
     def _find_serial_device_by_vid_pid(self):
         """Find a serial device by VID and PID
-        
+
         Returns:
             str: Serial port path if found, None otherwise
         """
@@ -374,7 +413,9 @@ class Board(QObject):
             ports = self._get_available_serial_ports()
             if len(ports) and self.vid is None and self.pid is None:
                 self.logger.info(f"Auto-selected serial port: {ports[0].device}")
-                self.status_message.emit(f"Auto-selected serial port: {ports[0].device}")
+                self.status_message.emit(
+                    f"Auto-selected serial port: {ports[0].device}"
+                )
                 return ports[0].device
 
             for port in ports:
@@ -390,12 +431,21 @@ class Board(QObject):
                     pid_match = f"{port.pid:04x}".lower() == str(self.pid).lower()
 
                 if vid_match and pid_match:
-                    self.logger.info(f"Found matching serial device: {port.device} ({port.description})")
-                    self.status_message.emit(f"Found matching serial device: {port.device}")
+                    self.logger.info(
+                        f"Found matching serial device: {port.device} "
+                        f"({port.description})"
+                    )
+                    self.status_message.emit(
+                        f"Found matching serial device: {port.device}"
+                    )
                     return port.device
 
-            self.logger.warning(f"No serial device found with VID={self.vid}, PID={self.pid}")
-            self.status_message.emit(f"No serial device found with VID={self.vid}, PID={self.pid}")
+            self.logger.warning(
+                f"No serial device found with VID={self.vid}, PID={self.pid}"
+            )
+            self.status_message.emit(
+                f"No serial device found with VID={self.vid}, PID={self.pid}"
+            )
             return None
         except Exception as e:
             self.logger.error(f"Error finding serial device by VID/PID: {e}")
@@ -408,7 +458,8 @@ class Board(QObject):
             list: List of serial port objects, or empty list if none found
         """
         try:
-            # Use grep to filter for USB serial devices (more elegant than manual filtering)
+            # Use grep to filter for USB serial devices (more elegant than
+            # manual filtering)
             # Pattern matches VID/PID in hardware ID (from connections.py pattern)
             ports = list(serial.tools.list_ports.grep(self.SERIAL_VID_PID_PATTERN))
             return ports
@@ -421,7 +472,8 @@ class Board(QObject):
         """List serial ports filtered to likely board devices (VID/PID-present entries).
 
         Returns:
-            list: List of serial port objects filtered similarly to _get_available_serial_ports().
+            list: List of serial port objects filtered similarly to
+                _get_available_serial_ports().
         """
         try:
             return list(serial.tools.list_ports.grep(Board.SERIAL_VID_PID_PATTERN))
@@ -430,9 +482,10 @@ class Board(QObject):
 
     def setup(self, only_once=False):
         """Initialize the connection (Serial or Bluetooth)
-        
+
         Returns:
-            bool: True if successful initialization (or already connected), False otherwise
+            bool: True if successful initialization (or already connected),
+                False otherwise
         """
         # If already connected or connecting, don't try again
         if self._connected:
@@ -451,14 +504,22 @@ class Board(QObject):
                 ports = self._get_available_serial_ports()
                 if len(ports):
                     self.connection_mode = self.MODE_SERIAL
-                    self.logger.info("Serial ports available, trying Serial connection first")
+                    self.logger.info(
+                        "Serial ports available, trying Serial connection first"
+                    )
                 else:
-                    self.logger.info("No serial ports available, trying Bluetooth connection")
+                    self.logger.info(
+                        "No serial ports available, trying Bluetooth connection"
+                    )
                     # Check address format first
-                    if self._is_bluetooth_uuid(self.address) or self._is_bluetooth_mac(self.address):
+                    if self._is_bluetooth_uuid(self.address) or self._is_bluetooth_mac(
+                        self.address
+                    ):
                         # Explicit Bluetooth address - use Bluetooth
                         self.connection_mode = self.MODE_BLUETOOTH
-                        self.logger.info("Detected Bluetooth address format, using Bluetooth mode")
+                        self.logger.info(
+                            "Detected Bluetooth address format, using Bluetooth mode"
+                        )
                     else:
                         self.connection_mode = None
                         self.logger.info("No available devices found")
@@ -467,17 +528,23 @@ class Board(QObject):
             if self.connection_mode == self.MODE_SERIAL:
                 connection_result = self._connect_serial()
 
-                # If serial fails and we haven't tried Bluetooth yet, try Bluetooth as fallback
+                # If serial fails and we haven't tried Bluetooth yet, try
+                # Bluetooth as fallback
                 if not connection_result and not self._bt_tried:
-                    self.logger.info("Serial connection failed, trying Bluetooth fallback")
-                    self.status_message.emit("Serial connection failed, trying Bluetooth...")
+                    self.logger.info(
+                        "Serial connection failed, trying Bluetooth fallback"
+                    )
+                    self.status_message.emit(
+                        "Serial connection failed, trying Bluetooth..."
+                    )
                     self.connection_mode = self.MODE_BLUETOOTH
                     # Reset Bluetooth tried flag to allow retry
                     self._bt_tried = False
                     # Use shorter timeout for Bluetooth to avoid freezing
                     connection_result = self._run_coroutine(
-                        self._connect_with_timeout(self.SHORT_CONNECTION_TIMEOUT,
-                                                   try_serial=False)
+                        self._connect_with_timeout(
+                            self.SHORT_CONNECTION_TIMEOUT, try_serial=False
+                        )
                     )
                     if connection_result:
                         self._bt_tried = True
@@ -491,8 +558,9 @@ class Board(QObject):
                 self._bt_tried = True
                 # Do not fall back to serial implicitly; honor explicit user actions
                 connection_result = self._run_coroutine(
-                    self._connect_with_timeout(self.SHORT_CONNECTION_TIMEOUT,
-                                               try_serial=False)
+                    self._connect_with_timeout(
+                        self.SHORT_CONNECTION_TIMEOUT, try_serial=False
+                    )
                 )
 
                 if only_once:
@@ -509,7 +577,7 @@ class Board(QObject):
 
     def _connect_serial(self):
         """Connect to the device using a serial port
-        
+
         Returns:
             bool: True if connected, False otherwise
         """
@@ -525,7 +593,9 @@ class Board(QObject):
             else:
                 device_path = self.port
 
-            self.logger.info(f"Connecting to serial port {device_path} at {self.baudrate} baud")
+            self.logger.info(
+                f"Connecting to serial port {device_path} at {self.baudrate} baud"
+            )
             self.status_message.emit(f"Connecting to serial port {device_path}...")
 
             # Connect to the serial port
@@ -543,7 +613,9 @@ class Board(QObject):
                     self.serial_port.reset_input_buffer()
                     self.serial_port.reset_output_buffer()
                 except Exception as e:
-                    self.logger.debug(f"Could not flush serial buffers (may be expected): {e}")
+                    self.logger.debug(
+                        f"Could not flush serial buffers (may be expected): {e}"
+                    )
 
                 # Send a test command (|||) and wait for a response
                 try:
@@ -555,19 +627,25 @@ class Board(QObject):
                 # ── START reader thread ─────────────────────────────
                 self._stop_reader = threading.Event()
                 self.reader_thread = threading.Thread(
-                    target=self._serial_reader, daemon=True)
+                    target=self._serial_reader, daemon=True
+                )
                 self.reader_thread.start()
                 # ────────────────────────────────────────────────────
                 # Try to read any response (some devices don't respond)
                 try:
                     if self.serial_port.in_waiting > 0:
                         response = self.serial_port.read(self.serial_port.in_waiting)
-                        response = response.decode('utf-8')
+                        response = response.decode("utf-8")
                         # self.logger.debug(f"Serial response: {response}")
                 except (OSError, IOError) as e:
                     # Handle "device reports readiness" error gracefully
-                    if "readiness to read" in str(e).lower() or "no data" in str(e).lower():
-                        self.logger.debug(f"Serial port ready but no data available (expected): {e}")
+                    if (
+                        "readiness to read" in str(e).lower()
+                        or "no data" in str(e).lower()
+                    ):
+                        self.logger.debug(
+                            f"Serial port ready but no data available (expected): {e}"
+                        )
                     else:
                         self.logger.debug(f"Serial read error (may be expected): {e}")
                 except Exception:
@@ -576,11 +654,15 @@ class Board(QObject):
 
                 self._connected = True
                 self.logger.info(f"Connected to serial port: {self.port}")
-                self._emit_connection_status(True, f"Connected to serial port: {self.port}")
+                self._emit_connection_status(
+                    True, f"Connected to serial port: {self.port}"
+                )
                 return True
             else:
                 self.logger.warning(f"Failed to open serial port: {self.port}")
-                self._emit_connection_status(False, f"Failed to open serial port: {self.port}")
+                self._emit_connection_status(
+                    False, f"Failed to open serial port: {self.port}"
+                )
                 return False
 
         except Exception as e:
@@ -590,9 +672,10 @@ class Board(QObject):
 
     def setup_async(self, callback=None):
         """Initialize the connection in a separate thread
-        
+
         Args:
-            callback: Function to call when connection is complete (with success boolean)
+            callback: Function to call when connection is complete (with
+                success boolean)
         """
         if self.connection_thread and self.connection_thread.is_alive():
             self.logger.info("Connection thread already running")
@@ -608,13 +691,18 @@ class Board(QObject):
 
                 # Emit status message about connection mode
                 if result:
-                    mode_str = "Bluetooth" if self.connection_mode == self.MODE_BLUETOOTH else "USB"
+                    mode_str = (
+                        "Bluetooth"
+                        if self.connection_mode == self.MODE_BLUETOOTH
+                        else "USB"
+                    )
                     self.status_message.emit(f"Connected via {mode_str}")
                 else:
                     self.status_message.emit("Connection failed")
 
                 if callback:
-                    # Only call callback if our connection succeeded to avoid NoneType errors
+                    # Only call callback if our connection succeeded to avoid
+                    # NoneType errors
                     if result:
                         callback(result)
                     else:
@@ -631,7 +719,7 @@ class Board(QObject):
     @staticmethod
     def search_devices(timeout=5.0, device_name="Controller"):
         """Search for available devices (Bluetooth devices or serial ports)
-        
+
         Returns:
             list: List of device descriptors
         """
@@ -641,6 +729,7 @@ class Board(QObject):
         # Search for Bluetooth devices
         logger.info("Searching for BLE devices...")
         try:
+
             async def run_scan():
                 return await BleakScanner.discover(timeout=timeout)
 
@@ -648,22 +737,29 @@ class Board(QObject):
 
             for device in devices:
                 name = device.name or "Unknown"
-                device_list.append({
-                    "address": device.address,
-                    "name": name,
-                    "type": "bluetooth",
-                    "display_name": f"{device.address} - {name} (Bluetooth)"
-                })
+                device_list.append(
+                    {
+                        "address": device.address,
+                        "name": name,
+                        "type": "bluetooth",
+                        "display_name": f"{device.address} - {name} (Bluetooth)",
+                    }
+                )
                 logger.debug(f"Found BLE device: {device.address} - {name}")
         except Exception as e:
             logger.error(f"Error searching for BLE devices: {e}")
 
-        # Return the combined list or just the string descriptions for backward compatibility
-        return [device["display_name"] for device in device_list if device_name in device["display_name"]]
+        # Return the combined list or just the string descriptions for
+        # backward compatibility
+        return [
+            device["display_name"]
+            for device in device_list
+            if device_name in device["display_name"]
+        ]
 
     def store_device_info(self, address, device_type, vid=None, pid=None):
         """Store device information for future connections
-        
+
         Args:
             address: Device address (for Bluetooth) or port (for serial)
             device_type: 'bluetooth' or 'serial'
@@ -680,11 +776,11 @@ class Board(QObject):
 
     async def _connect_with_timeout(self, timeout=None, try_serial=True):
         """Attempt to connect with a timeout (Bluetooth mode)
-        
+
         Args:
             timeout: Timeout in seconds (defaults to DEFAULT_CONNECTION_TIMEOUT)
             try_serial: Whether to try serial fallback
-            
+
         Returns:
             bool: True if connected, False otherwise
         """
@@ -705,7 +801,9 @@ class Board(QObject):
             if try_serial:
                 # Try to fall back to serial if Bluetooth fails
                 self.logger.info("Bluetooth connection failed, trying serial fallback")
-                self.status_message.emit("Bluetooth connection failed, trying USB connection...")
+                self.status_message.emit(
+                    "Bluetooth connection failed, trying USB connection..."
+                )
                 self.connection_mode = self.MODE_SERIAL
 
                 # Don't use Bluetooth address for serial connection
@@ -720,7 +818,9 @@ class Board(QObject):
             # If Bluetooth fails, try to fall back to serial
             if not self._connected:
                 self.logger.info("Bluetooth connection failed, trying serial fallback")
-                self.status_message.emit("Bluetooth connection failed, trying USB connection...")
+                self.status_message.emit(
+                    "Bluetooth connection failed, trying USB connection..."
+                )
                 self.connection_mode = self.MODE_SERIAL
 
                 # Don't use Bluetooth address for serial connection
@@ -736,7 +836,10 @@ class Board(QObject):
         Manages the entire lifecycle of the BLE connection within the event loop.
         This function replaces the previous, short-lived _connect function logic.
         """
-        if not (self._is_bluetooth_uuid(self.address) or self._is_bluetooth_mac(self.address)):
+        if not (
+            self._is_bluetooth_uuid(self.address)
+            or self._is_bluetooth_mac(self.address)
+        ):
             self.logger.info(f"Scanning for {self.device_name} devices...")
             self.status_message.emit(f"Scanning for {self.device_name} devices...")
             devices = await BleakScanner.discover(timeout=self.BLE_DISCOVERY_TIMEOUT)
@@ -744,7 +847,9 @@ class Board(QObject):
                 if device.name and self.device_name in device.name:
                     self.address = device.address
                     self.logger.info(f"Found {self.device_name} at {self.address}")
-                    self.status_message.emit(f"Found {self.device_name} at {self.address}")
+                    self.status_message.emit(
+                        f"Found {self.device_name} at {self.address}"
+                    )
                     break
             if not self.client:
                 msg = f"{self.device_name} device not found"
@@ -752,11 +857,14 @@ class Board(QObject):
                 raise Exception(msg)
 
         self.logger.info(f"Starting BLE connection manager for {self.address}")
-        self.disconnect_event = asyncio.Event() # Initialize this in the async function
+        self.disconnect_event = asyncio.Event()  # Initialize this in the async function
 
         try:
-            # Use the robust context manager that handles disconnects automatically on exit
-            async with BleakClient(self.address, timeout=self.DEFAULT_CONNECTION_TIMEOUT) as client:
+            # Use the robust context manager that handles disconnects
+            # automatically on exit
+            async with BleakClient(
+                self.address, timeout=self.DEFAULT_CONNECTION_TIMEOUT
+            ) as client:
                 self.client = client
                 self._connected = True
                 self.logger.info(f"Connected successfully to {self.address}")
@@ -773,7 +881,9 @@ class Board(QObject):
                 while self.connected:
                     if self.disconnect_event.is_set():
                         break
-                    await asyncio.sleep(0.5) # Prevents blocking the event loop entirely
+                    await asyncio.sleep(
+                        0.5
+                    )  # Prevents blocking the event loop entirely
         except asyncio.CancelledError:
             pass
         except asyncio.TimeoutError:
@@ -810,7 +920,7 @@ class Board(QObject):
         self.rx_event.clear()
 
         # 2. Send the command (assuming you have a write function)
-        data = f"{command}\n".encode('utf-8')
+        data = f"{command}\n".encode("utf-8")
         # This function should exist in your class for writing data over BLE/Serial
         await self.client.write_gatt_char(UART_RX_CHAR_UUID, data, response=True)
         self.logger.debug(f"Sent command: {command}")
@@ -822,7 +932,9 @@ class Board(QObject):
         except asyncio.TimeoutError:
             # Timeout occurred before the event was set
             self.logger.warning(
-                f"Timeout while waiting for response to '{command}'. Current buffer: {len(self.receive_buffer)} bytes.")
+                f"Timeout while waiting for response to '{command}'. "
+                f"Current buffer: {len(self.receive_buffer)} bytes."
+            )
             # The message is considered complete via timeout in this scenario
             pass
         finally:
@@ -845,8 +957,8 @@ class Board(QObject):
         try:
             # Add newline to command if needed and encode
             if not isinstance(command, bytes):
-                if not command.endswith('\n'):
-                    command = command + '\n'
+                if not command.endswith("\n"):
+                    command = command + "\n"
                 command = command.encode()
 
             self.logger.debug(f"Sending serial command: {command}")
@@ -854,14 +966,17 @@ class Board(QObject):
             # Use a retry mechanism for sending commands
             for attempt in range(self.MAX_COMMAND_RETRIES):
                 try:
-                    self.serial_port.write(command)                    
+                    self.serial_port.write(command)
                     # response = self.serial_port.read_until(b'\n')
                     # self.logger.debug(f"Serial response: {response}")
                     return  # Success
                 except Exception as e:
                     if attempt == self.MAX_COMMAND_RETRIES - 1:  # Last attempt
                         raise
-                    self.logger.warning(f"Serial command failed (attempt {attempt+1}/{self.MAX_COMMAND_RETRIES}): {e}")
+                    self.logger.warning(
+                        f"Serial command failed (attempt "
+                        f"{attempt + 1}/{self.MAX_COMMAND_RETRIES}): {e}"
+                    )
                     # Check connection before retry
                     if not self.serial_port or not self.serial_port.is_open:
                         # Try to reconnect
@@ -883,12 +998,17 @@ class Board(QObject):
             loop = self.loop  # Get the reference to the main event loop
 
             if not loop or loop.is_closed() or not loop.is_running():
-                self.logger.warning("Event loop is not available or running in handler.")
+                self.logger.warning(
+                    "Event loop is not available or running in handler."
+                )
                 return
 
             # Check for immediate completion conditions without creating tasks here
             is_complete = False
-            if text.rstrip().endswith(">>>") or len(self.receive_buffer) > self.RECEIVE_BUFFER_THRESHOLD:
+            if (
+                text.rstrip().endswith(">>>")
+                or len(self.receive_buffer) > self.RECEIVE_BUFFER_THRESHOLD
+            ):
                 is_complete = True
 
             if is_complete:
@@ -908,7 +1028,8 @@ class Board(QObject):
             # Wait for the notification handler to set the event (thread safe)
             await asyncio.wait_for(self.rx_event.wait(), timeout=timeout)
 
-            # CRITICAL STEP: Extract the message and reset state *after* the event is set
+            # CRITICAL STEP: Extract the message and reset state *after* the
+            # event is set
             response_buffer = self.receive_buffer
             self.receive_buffer = ""  # <<< Clear the buffer after reading it
             self.message_complete = False
@@ -917,12 +1038,16 @@ class Board(QObject):
             # Post-process the response here to clean up the prompt characters
             cleaned_response = response_buffer.split(">>>")[0].strip()
             self.logger.info(f"Processed response: {cleaned_response}")
-            # self.telemetry.emit({"raw": cleaned_response})  # Emit the signal to QObject
+            # self.telemetry.emit({"raw": cleaned_response})  # Emit the
+            # signal to QObject
 
             return cleaned_response
 
         except asyncio.TimeoutError:
-            self.logger.warning(f"Timeout while waiting for response. Current buffer: {self.receive_buffer}")
+            self.logger.warning(
+                f"Timeout while waiting for response. "
+                f"Current buffer: {self.receive_buffer}"
+            )
             # Ensure buffer is cleared on timeout as well, to prevent accumulation
             self.receive_buffer = ""
             self.rx_event.clear()
@@ -935,7 +1060,7 @@ class Board(QObject):
 
     async def _check_connection(self):
         """Check if the Bluetooth connection is still active
-        
+
         Returns:
             bool: True if connected, False otherwise
         """
@@ -949,7 +1074,7 @@ class Board(QObject):
 
     def reconnect_if_needed(self, only_once=False):
         """Attempt to reconnect if not connected
-        
+
         Returns:
             bool: True if connected (already connected or reconnected), False otherwise
         """
@@ -965,15 +1090,21 @@ class Board(QObject):
                 return True
 
         try:
-            # When only_once is True, do a single fast attempt without scanning/discovery
+            # When only_once is True, do a single fast attempt without
+            # scanning/discovery
             if only_once:
                 self.logger.info("Quick reconnect attempt (single try, no discovery)")
                 # Auto-detect connection mode if not set
                 if not self.connection_mode:
                     # Try to determine mode from address format first
-                    if self._is_bluetooth_uuid(self.address) or self._is_bluetooth_mac(self.address):
+                    if self._is_bluetooth_uuid(self.address) or self._is_bluetooth_mac(
+                        self.address
+                    ):
                         self.connection_mode = self.MODE_BLUETOOTH
-                    elif self.address.lower().startswith("com") or "/dev/" in self.address.lower():
+                    elif (
+                        self.address.lower().startswith("com")
+                        or "/dev/" in self.address.lower()
+                    ):
                         self.connection_mode = self.MODE_SERIAL
                     else:
                         # Check for available serial ports (fast check)
@@ -983,7 +1114,9 @@ class Board(QObject):
                             # If address is "auto", use the first available port
                             if self.address == "auto":
                                 self.address = ports[0].device
-                                self.logger.info(f"Auto-selected serial port: {self.address}")
+                                self.logger.info(
+                                    f"Auto-selected serial port: {self.address}"
+                                )
                         else:
                             self.connection_mode = self.MODE_BLUETOOTH
 
@@ -991,8 +1124,13 @@ class Board(QObject):
                 if self.connection_mode == self.MODE_SERIAL:
                     return self._connect_serial()
                 elif self.connection_mode == self.MODE_BLUETOOTH:
-                    # Shorter timeout and no discovery path because address should be set
-                    return self._run_coroutine(self._connect_with_timeout(self.QUICK_RECONNECT_TIMEOUT, try_serial=False))
+                    # Shorter timeout and no discovery path because address
+                    # should be set
+                    return self._run_coroutine(
+                        self._connect_with_timeout(
+                            self.QUICK_RECONNECT_TIMEOUT, try_serial=False
+                        )
+                    )
                 # If unknown mode, do not attempt discovery; bail fast
                 return False
 
@@ -1017,21 +1155,27 @@ class Board(QObject):
                 if self.connection_mode == self.MODE_BLUETOOTH:
                     # Turn off LEDs before disconnecting (only for Bluetooth)
                     if self.loop and self.loop.is_running():
-                        # self.disconnect_event needs to be an asyncio.Event() initialized in __init__
+                        # self.disconnect_event needs to be an asyncio.Event()
+                        # initialized in __init__
                         self.send_cmd_bt_async("all_off")
                         self.loop.call_soon_threadsafe(self.disconnect_event.set)
                 else:  # MODE_SERIAL
-                    # For serial, send command first (while port is still open and reader is running)
+                    # For serial, send command first (while port is still
+                    # open and reader is running)
                     # Then stop reader threads, then close port
                     try:
                         if self.serial_port and self.serial_port.is_open:
                             self.send_cmd("all_off")
                     except Exception as e:
-                        self.logger.warning(f"Failed to turn off LEDs during disconnect: {e}")
+                        self.logger.warning(
+                            f"Failed to turn off LEDs during disconnect: {e}"
+                        )
                     # Now disconnect (this will stop reader threads and close port)
                     self._disconnect_serial()
 
-                self.logger.info(f"{self.connection_mode.capitalize()} connection closed")
+                self.logger.info(
+                    f"{self.connection_mode.capitalize()} connection closed"
+                )
             except Exception as e:
                 self.logger.error(f"Error closing connection: {e}")
 
@@ -1050,12 +1194,19 @@ class Board(QObject):
 
                             # Use run_until_complete with proper error handling
                             try:
-                                self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                                self.loop.run_until_complete(
+                                    asyncio.gather(*pending, return_exceptions=True)
+                                )
                             except (RuntimeError, asyncio.CancelledError):
-                                # This can happen if we're already in the process of closing the loop
-                                self.logger.debug("Error when gathering pending tasks during shutdown (expected)")
+                                # This can happen if we're already in the
+                                # process of closing the loop
+                                self.logger.debug(
+                                    "Error when gathering pending tasks "
+                                    "during shutdown (expected)"
+                                )
 
-                        # Make sure we close the loop in the same thread it was created in
+                        # Make sure we close the loop in the same thread it
+                        # was created in
                         self.loop.close()
                         self.logger.info("Successfully closed asyncio event loop")
                     except Exception as e:
@@ -1067,16 +1218,21 @@ class Board(QObject):
     def _disconnect_serial(self):
         """Disconnect from serial port"""
         try:
-            # Stop reader threads BEFORE closing the port to avoid "Bad file descriptor" errors
+            # Stop reader threads BEFORE closing the port to avoid "Bad file
+            # descriptor" errors
             # Set flags to stop reader threads
             self._connected = False
-            if hasattr(self, '_stop_reader'):
+            if hasattr(self, "_stop_reader"):
                 self._stop_reader.set()  # Stop _serial_reader()
-            
+
             # Wait for the reader thread to stop
-            if hasattr(self, 'reader_thread') and self.reader_thread and self.reader_thread.is_alive():
+            if (
+                hasattr(self, "reader_thread")
+                and self.reader_thread
+                and self.reader_thread.is_alive()
+            ):
                 self.reader_thread.join(timeout=0.5)
-            
+
             # Now close the port
             if self.serial_port and self.serial_port.is_open:
                 self.serial_port.close()
@@ -1086,9 +1242,9 @@ class Board(QObject):
             self.logger.error(f"Error during serial disconnect: {e}")
             self._connected = False
 
-    # ─────────────────────────────────────────────────────────────
-    #  Background reader: handles §{json} telemetry + plain text
-    # ─────────────────────────────────────────────────────────────
+        # ─────────────────────────────────────────────────────────────
+        #  Background reader: handles §{json} telemetry + plain text
+        # ─────────────────────────────────────────────────────────────
         def _serial_reader(self):
             """
             Runs in a daemon thread. Reads one line at a time, decodes UTF-8,
@@ -1102,31 +1258,31 @@ class Board(QObject):
                     if not self.serial_port or not self.serial_port.is_open:
                         self.logger.debug("Serial port closed, reader thread exiting")
                         break
-                    
+
                     try:
                         raw = self.serial_port.readline()
                     except (OSError, serial.SerialException) as e:
                         # Port was closed or error reading
                         self.logger.debug(f"Serial read error: {e}, thread exiting")
                         break
-                    
+
                     if not raw:
-                        continue           # timeout → just loop again
-                    
+                        continue  # timeout → just loop again
+
                     try:
-                        line = raw.decode(errors='ignore').strip()
+                        line = raw.decode(errors="ignore").strip()
                     except UnicodeDecodeError:
                         continue
 
                     # Parse JSON telemetry packets
-                    if line.startswith('§'):
+                    if line.startswith("§"):
                         try:
-                            pkt = json.loads(line[line.find("{"):])  # strip leading §
-                            self.telemetry.emit(pkt)                 # Qt → App
-                            serial_echo.debug("RX  %s", pkt)         # console log
+                            pkt = json.loads(line[line.find("{") :])  # strip leading §
+                            self.telemetry.emit(pkt)  # Qt → App
+                            serial_echo.debug("RX  %s", pkt)  # console log
                         except Exception as e:
                             self.logger.warning("Bad json %s  (%s)", line, e)
-                        continue    # handled, next line
+                        continue  # handled, next line
 
                     # Emit non-JSON messages (regular serial output)
                     if line:
@@ -1135,7 +1291,7 @@ class Board(QObject):
                 self.logger.error("Serial reader crashed: %s", e)
             finally:
                 self.logger.debug("Serial reader thread terminated")
-            
+
     def _serial_reader(self):
         """
         Runs in a daemon thread.  Reads one line at a time, decodes UTF-8,
@@ -1151,37 +1307,40 @@ class Board(QObject):
 
                 raw = self.serial_port.readline()
                 if not raw:
-                    continue           # timeout → just loop again
+                    continue  # timeout → just loop again
                 try:
-                    line = raw.decode(errors='ignore').strip()
+                    line = raw.decode(errors="ignore").strip()
                 except UnicodeDecodeError:
                     continue
 
                 # Parse JSON telemetry packets
-                if line.startswith('§'):
+                if line.startswith("§"):
                     try:
                         # Frame header sits between '§' and the JSON object —
                         # e.g. '§PID_TEC1{...}' -> 'PID_TEC1'. Tagging it onto
                         # the dict lets the UI route TEMP/PID frames vs INFO,
                         # ERR, and WHOAMI events instead of treating them all
                         # as the same telemetry shape.
-                        json_start_index = line.find('{')
+                        json_start_index = line.find("{")
                         if json_start_index != -1:
                             frame = line[1:json_start_index]
                             pkt_txt = line[json_start_index:]
                             pkt = json.loads(pkt_txt)
                             if isinstance(pkt, dict):
-                                pkt['_frame'] = frame
+                                pkt["_frame"] = frame
                             self.telemetry.emit(pkt)
                             serial_echo.debug("RX  %s %s", frame, pkt)
                         else:
-                            self.logger.warning("Found telemetry marker '§' but no JSON object: %s", line)
+                            self.logger.warning(
+                                "Found telemetry marker '§' but no JSON object: %s",
+                                line,
+                            )
                     except Exception as e:
                         self.logger.warning("Bad json %s  (%s)", line, e)
-                    continue    # handled, next line
-                
+                    continue  # handled, next line
+
                 elif line:
-                    # Emit non-JSON messages (regular serial output)                 
+                    # Emit non-JSON messages (regular serial output)
                     self.message_received.emit(line)
                     # self.logger.debug("SERIAL %s", line)        # legacy output
         except (OSError, IOError):
@@ -1190,6 +1349,7 @@ class Board(QObject):
             pass
         except Exception as e:
             self.logger.error("Serial reader crashed: %s", e)
+
     # ─────────────────────────────────────────────────────────────
 
     async def _disconnect(self):
@@ -1218,16 +1378,17 @@ class Board(QObject):
     @fail_safe
     def send_cmd(self, command):
         """Send a command to the device (via Bluetooth or Serial)
-        
+
         Args:
             command: The command string to send directly to the device
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
         if not self._connected:
             self.logger.warning("Device not connected")
-            # Fast path: avoid expensive BLE discovery unless explicitly requested elsewhere
+            # Fast path: avoid expensive BLE discovery unless explicitly
+            # requested elsewhere
             if not self.reconnect_if_needed(only_once=True):
                 return False
 
@@ -1262,7 +1423,7 @@ class Board(QObject):
 
     def change_connection_mode(self, mode, address=None, port=None, baudrate=None):
         """Change the connection mode between Bluetooth and Serial
-        
+
         This method initiates the connection asynchronously. The result is
         communicated via the `connection_changed` signal.
 
@@ -1276,7 +1437,8 @@ class Board(QObject):
             self.logger.error(f"Invalid connection mode: {mode}")
             return
 
-        # If already in this mode and connected, only proceed if parameters require a change
+        # If already in this mode and connected, only proceed if parameters
+        # require a change
         if self.connection_mode == mode and self._connected:
             if mode == self.MODE_SERIAL:
                 needs_change = False
@@ -1317,7 +1479,7 @@ class Board(QObject):
             firmware_path: Path to the directory containing firmware files
             reset_device: Whether to reset the device after upload
             callback: Optional callback function to be called after firmware upload
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
@@ -1334,42 +1496,53 @@ class Board(QObject):
         # Start upload in a separate thread using mpremote
         upload_thread = threading.Thread(
             target=self._upload_firmware_mpremote,
-            args=(firmware_path, reset_device, callback)
+            args=(firmware_path, reset_device, callback),
         )
         upload_thread.daemon = True
         upload_thread.start()
         return True
 
-    def _upload_firmware_mpremote(self, firmware_path, reset_device=True, callback=None):
+    def _upload_firmware_mpremote(
+        self, firmware_path, reset_device=True, callback=None
+    ):
         """Upload firmware using mpremote Python module
-        
+
         Args:
             firmware_path: Path to the directory containing firmware files
             reset_device: Whether to reset the device after upload
             callback: Optional callback function to be called after firmware upload
         """
         try:
-            self.status_message.emit("Preparing to upload firmware with mpremote module...")
-            self.logger.info(f"Using mpremote module to upload firmware from {firmware_path}")
+            self.status_message.emit(
+                "Preparing to upload firmware with mpremote module..."
+            )
+            self.logger.info(
+                f"Using mpremote module to upload firmware from {firmware_path}"
+            )
 
             # Need to close our serial connection so mpremote can access the device
             original_port = self.serial_port.port
             baudrate = self.baudrate
-            self.logger.info(f"Temporarily closing serial port {original_port} for mpremote access")
+            self.logger.info(
+                f"Temporarily closing serial port {original_port} for mpremote access"
+            )
             self.serial_port.close()
             self._connected = False
 
             # Get list of Python files
             fw_path = Path(firmware_path)
             if fw_path.is_dir():
-                files = [f for f in fw_path.glob('**/*')
-                         if f.suffix not in ['', '.md'] or f.is_dir()]
+                files = [
+                    f
+                    for f in fw_path.glob("**/*")
+                    if f.suffix not in ["", ".md"] or f.is_dir()
+                ]
 
-                files.sort(key=lambda f: (
-                    0 if f.name == "boot.py" else (
-                        1 if f.name == "main.py" else 2
+                files.sort(
+                    key=lambda f: (
+                        0 if f.name == "boot.py" else (1 if f.name == "main.py" else 2)
                     )
-                ))
+                )
                 self.logger.info(f"Found {len(files)} files to upload")
             else:
                 self.logger.error(f"Firmware path {firmware_path} is not a directory")
@@ -1404,11 +1577,16 @@ class Board(QObject):
             try:
                 # Import mpremote module
                 try:
-                    mpremote = importlib.import_module('mpremote.main')
+                    mpremote = importlib.import_module("mpremote.main")
                     self.logger.info("Successfully imported mpremote module")
                 except ImportError:
-                    self.logger.error("Failed to import mpremote module. Is it installed?")
-                    self.status_message.emit("Error: mpremote module not found. Install with 'pip install mpremote'")
+                    self.logger.error(
+                        "Failed to import mpremote module. Is it installed?"
+                    )
+                    self.status_message.emit(
+                        "Error: mpremote module not found. Install with "
+                        "'pip install mpremote'"
+                    )
 
                     # Manually reopen port before signaling
                     self._reopen_serial_port(original_port, baudrate)
@@ -1441,17 +1619,32 @@ class Board(QObject):
                 # Upload each file
                 all_successful = True
                 for i, filename in enumerate(files):
-                    self.status_message.emit(f"Uploading file {i+1}/{len(files)}: {filename}")
-                    self.upload_progress.emit(i+1, len(files))
+                    self.status_message.emit(
+                        f"Uploading file {i + 1}/{len(files)}: {filename}"
+                    )
+                    self.upload_progress.emit(i + 1, len(files))
 
                     local_path = str(filename.absolute())
-                    remote_path = str(filename.relative_to(fw_path))  # Upload to root directory
+                    remote_path = str(
+                        filename.relative_to(fw_path)
+                    )  # Upload to root directory
 
                     # Use mpremote module to upload the file
                     if filename.is_dir():
-                        upload_cmd = ["connect", original_port, "mkdir", f"{remote_path}"]
+                        upload_cmd = [
+                            "connect",
+                            original_port,
+                            "mkdir",
+                            f"{remote_path}",
+                        ]
                     else:
-                        upload_cmd = ["connect", original_port, "cp", local_path, f":{remote_path}"]
+                        upload_cmd = [
+                            "connect",
+                            original_port,
+                            "cp",
+                            local_path,
+                            f":{remote_path}",
+                        ]
 
                     try:
                         # Save original sys.argv and restore it after
@@ -1488,15 +1681,23 @@ class Board(QObject):
                     self.status_message.emit("Firmware upload complete")
                     self.logger.info("Firmware upload completed successfully")
                 else:
-                    self.status_message.emit("Firmware upload incomplete - some files failed")
-                    self.logger.warning("Firmware upload incomplete - some files failed")
+                    self.status_message.emit(
+                        "Firmware upload incomplete - some files failed"
+                    )
+                    self.logger.warning(
+                        "Firmware upload incomplete - some files failed"
+                    )
 
                 # Make sure mpremote has closed the port
-                time.sleep(self.FIRMWARE_UPLOAD_DELAY)  # Longer delay before reconnection to give device time to reboot
+                time.sleep(
+                    self.FIRMWARE_UPLOAD_DELAY
+                )  # Longer delay before reconnection to give device time to reboot
 
                 # When the device reboots, it often connects on a different port
                 # Scan available ports to find the new port name
-                self.logger.info("Looking for the device on available ports after firmware upload...")
+                self.logger.info(
+                    "Looking for the device on available ports after firmware upload..."
+                )
 
                 # Try to find the device with same identifiers
                 new_port = None
@@ -1510,31 +1711,48 @@ class Board(QObject):
                         # First try to match by VID/PID
                         if self.vid and self.pid:
                             for port in ports:
-                                if (hasattr(port, 'vid') and port.vid is not None and
-                                    hasattr(port, 'pid') and port.pid is not None and
-                                    f"{port.vid:04x}".lower() == str(self.vid).lower() and
-                                    f"{port.pid:04x}".lower() == str(self.pid).lower()):
+                                if (
+                                    hasattr(port, "vid")
+                                    and port.vid is not None
+                                    and hasattr(port, "pid")
+                                    and port.pid is not None
+                                    and f"{port.vid:04x}".lower()
+                                    == str(self.vid).lower()
+                                    and f"{port.pid:04x}".lower()
+                                    == str(self.pid).lower()
+                                ):
                                     new_port = port.device
-                                    self.logger.info(f"Found device with matching VID/PID on port {new_port}")
+                                    self.logger.info(
+                                        f"Found device with matching VID/PID "
+                                        f"on port {new_port}"
+                                    )
                                     break
 
                         # If not found by VID/PID, try the original port
                         if not new_port and original_port in [p.device for p in ports]:
                             new_port = original_port
-                            self.logger.info(f"Original port {original_port} is still available")
+                            self.logger.info(
+                                f"Original port {original_port} is still available"
+                            )
 
                         # If still not found, look for any compatible port
                         if not new_port:
                             for port in ports:
                                 if "usbmodem" in port.device or "ttyACM" in port.device:
                                     new_port = port.device
-                                    self.logger.info(f"Found potential device port {new_port}")
+                                    self.logger.info(
+                                        f"Found potential device port {new_port}"
+                                    )
                                     break
 
                         # If no port found, wait and retry
                         if not new_port:
                             tries += 1
-                            self.logger.info(f"No suitable port found. Waiting and retrying ({tries}/{self.FIRMWARE_UPLOAD_MAX_TRIES})...")
+                            self.logger.info(
+                                f"No suitable port found. Waiting and "
+                                f"retrying ({tries}/"
+                                f"{self.FIRMWARE_UPLOAD_MAX_TRIES})..."
+                            )
                             time.sleep(self.FIRMWARE_UPLOAD_RETRY_DELAY)
 
                     except Exception as e:
@@ -1545,7 +1763,10 @@ class Board(QObject):
                 # If we found a new port, try to reconnect to it
                 if new_port:
                     try:
-                        self.logger.info(f"Attempting to connect to port {new_port} after firmware upload")
+                        self.logger.info(
+                            f"Attempting to connect to port {new_port} "
+                            f"after firmware upload"
+                        )
                         self.status_message.emit(f"Reconnecting to {new_port}...")
 
                         # Update our address to the new port
@@ -1562,10 +1783,14 @@ class Board(QObject):
                             self.logger.warning(f"Could not open port {new_port}")
                             self._connected = False
                     except Exception as e:
-                        self.logger.error(f"Error connecting to new port {new_port}: {e}")
+                        self.logger.error(
+                            f"Error connecting to new port {new_port}: {e}"
+                        )
                         self._connected = False
                 else:
-                    self.logger.warning("Could not find a suitable port after firmware upload")
+                    self.logger.warning(
+                        "Could not find a suitable port after firmware upload"
+                    )
                     self._connected = False
 
                 # Use signal to ensure reconnection happens on main thread regardless
@@ -1619,7 +1844,9 @@ class Board(QObject):
             # Remember current serial port
             port = self.serial_port.port
             baudrate = self.baudrate
-            self.logger.info(f"Temporarily closing serial port {port} for mpremote access")
+            self.logger.info(
+                f"Temporarily closing serial port {port} for mpremote access"
+            )
 
             # Close our serial connection so mpremote can access the device
             self.serial_port.close()
@@ -1627,8 +1854,10 @@ class Board(QObject):
 
             try:
                 # Import mpremote module
-                mpremote = importlib.import_module('mpremote.main')
-                self.logger.info("Successfully imported mpremote module for file listing")
+                mpremote = importlib.import_module("mpremote.main")
+                self.logger.info(
+                    "Successfully imported mpremote module for file listing"
+                )
 
                 # Create command to list files
                 list_cmd = ["connect", port, "ls"]
@@ -1654,7 +1883,12 @@ class Board(QObject):
                         if ":" in line:  # Skip directory headers like "/:"
                             continue
                         # Skip directory markers and empty lines
-                        if not line.startswith('/') and not line.endswith('/') and not line.startswith('mode') and line:
+                        if (
+                            not line.startswith("/")
+                            and not line.endswith("/")
+                            and not line.startswith("mode")
+                            and line
+                        ):
                             # Try to extract the filename (usually the last field)
                             parts = line.split()
                             if parts:
@@ -1675,7 +1909,10 @@ class Board(QObject):
 
             except ImportError:
                 self.logger.error("Failed to import mpremote module. Is it installed?")
-                self.status_message.emit("Error: mpremote module not found. Install with 'pip install mpremote'")
+                self.status_message.emit(
+                    "Error: mpremote module not found. Install with "
+                    "'pip install mpremote'"
+                )
                 # Fall back to traditional method
                 self.reconnect_signal.emit()
                 return self._list_firmware_files_traditional()
@@ -1711,7 +1948,9 @@ class Board(QObject):
             # Parse response
             if response:
                 # Try to extract Python list from response
-                match = re.search(r'\[(.*)\]', response.decode('utf-8', errors='ignore'))
+                match = re.search(
+                    r"\[(.*)\]", response.decode("utf-8", errors="ignore")
+                )
                 if match:
                     files_str = match.group(1)
                     # Parse the list items
@@ -1729,7 +1968,7 @@ class Board(QObject):
         """Enter MicroPython REPL mode"""
         try:
             # Send Ctrl+C to interrupt any running program
-            self.serial_port.write(b'\x03\x03')
+            self.serial_port.write(b"\x03\x03")
             time.sleep(self.REPL_ENTER_DELAY)
 
             # Flush any pending output
@@ -1737,7 +1976,7 @@ class Board(QObject):
             self.serial_port.reset_output_buffer()
 
             # Send Enter to get a clean prompt
-            self.serial_port.write(b'\r\n')
+            self.serial_port.write(b"\r\n")
             time.sleep(self.REPL_ENTER_DELAY)
 
             # Read response to check if we're in REPL
@@ -1745,9 +1984,9 @@ class Board(QObject):
             self.logger.debug(f"REPL response: {response}")
 
             # If we don't see a prompt, try again
-            if not response or b'>>>' not in response:
+            if not response or b">>>" not in response:
                 self.logger.debug("REPL prompt not found, trying again")
-                self.serial_port.write(b'\x03\r\n')
+                self.serial_port.write(b"\x03\r\n")
                 time.sleep(self.REPL_RETRY_DELAY)
 
             return True
@@ -1763,9 +2002,9 @@ class Board(QObject):
         """
         try:
             # Send the command
-            lines = command.strip().split('\n')
+            lines = command.strip().split("\n")
             for i, line in enumerate(lines):
-                self.serial_port.write(line.encode() + b'\r\n')
+                self.serial_port.write(line.encode() + b"\r\n")
                 time.sleep(0.01)
 
             # Read response

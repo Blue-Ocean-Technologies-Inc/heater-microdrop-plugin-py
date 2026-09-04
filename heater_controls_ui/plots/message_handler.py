@@ -7,18 +7,19 @@ the heater REQUEST topics for the commanded ones — the green setpoint line
 reports in telemetry (the plain stream carries no duty at all, so without the
 echo the PWM line froze at its last closed-loop value while in PWM mode).
 """
+
 import json
 
-from pyface.gui import GUI
 from traits.api import Instance
-
-from template_status_and_controls.base_message_handler import BaseMessageHandler
-from logger.logger_service import get_logger
 
 from heater_controller.consts import DEFAULT_HEATER
 from heater_controls_ui.telemetry import telemetry_samples
+from template_status_and_controls.base_message_handler import BaseMessageHandler
+
 from .log_model import HeaterLogViewerModel
 from .model import HeaterPlotModel
+
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -40,7 +41,7 @@ class HeaterPlotMessageHandler(BaseMessageHandler):
         a dramatiq worker, and the trait drives folder scanning + Qt."""
         if self.log_viewer_model is None or not body:
             return
-        self.log_viewer_model.saved_log_path=str(body)
+        self.log_viewer_model.saved_log_path = str(body)
 
     def _on_telemetry_triggered(self, body):
         data = self._payload(body)
@@ -68,10 +69,12 @@ class HeaterPlotMessageHandler(BaseMessageHandler):
         data = self._payload(body)
         pwm = (data or {}).get("pwm")
         if isinstance(pwm, (int, float)):
-            self.model.apply({
-                "heater": data.get("heater", DEFAULT_HEATER),
-                "pwm_percentage": float(pwm),
-            })
+            self.model.apply(
+                {
+                    "heater": data.get("heater", DEFAULT_HEATER),
+                    "pwm_percentage": float(pwm),
+                }
+            )
 
     def _on_start_stream_triggered(self, body):
         data = self._payload(body)
@@ -85,10 +88,12 @@ class HeaterPlotMessageHandler(BaseMessageHandler):
             self.model.set_setpoint(None)
             pwm = data.get("pwm")
             if isinstance(pwm, (int, float)):
-                self.model.apply({
-                    "heater": data.get("heater", DEFAULT_HEATER),
-                    "pwm_percentage": float(pwm),
-                })
+                self.model.apply(
+                    {
+                        "heater": data.get("heater", DEFAULT_HEATER),
+                        "pwm_percentage": float(pwm),
+                    }
+                )
 
     def _on_stop_stream_triggered(self, body):
         self.model.set_setpoint(None)

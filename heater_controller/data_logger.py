@@ -4,6 +4,7 @@ as one timestamped JSON line to a file under the current experiment's
 ``heater_logs`` folder; a fresh file starts on every stream OFF -> ON
 transition (run-mode changes mid-stream keep the same file).
 """
+
 import io
 import json
 import threading
@@ -13,9 +14,10 @@ from pathlib import Path
 from traits.api import HasTraits, Instance
 
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
-from logger.logger_service import get_logger
 
 from .consts import DATA_LOG_SAVED
+
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -63,8 +65,7 @@ class HeaterDataLogger(HasTraits):
                     counter += 1
                 self._log_file = log_path.open("w", encoding="utf-8")
             except OSError as e:
-                logger.warning(
-                    f"Could not start heater data log {log_path}: {e}")
+                logger.warning(f"Could not start heater data log {log_path}: {e}")
                 return
         logger.info(f"Heater data log started: {log_path}")
 
