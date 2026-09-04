@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Qt-free rolling buffers backing the heater plots.
 
 Telemetry arrives on the dramatiq worker thread and updates the *latest* value
@@ -23,10 +33,13 @@ The plot's run state also lives here so the view stays dumb:
   following redraw autoscales the axes to whatever data has arrived since.
 """
 
+# Standard library imports.
 import threading
 
+# Enthought library imports.
 from traits.api import Any, Bool, Dict, HasTraits, Instance, Int, List, Set, observe
 
+# Local imports.
 from .consts import MAX_PLOT_POINTS
 
 

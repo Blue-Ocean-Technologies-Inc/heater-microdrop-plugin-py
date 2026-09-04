@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 # Standard library imports
+
+# Standard library imports.
 import asyncio
 import importlib
 import io
@@ -13,14 +25,11 @@ import time
 from contextlib import redirect_stdout
 from pathlib import Path
 
+# Third-party imports.
 import serial
 import serial.tools.list_ports
-
-# Third-party imports
 import yaml
 from bleak import BleakClient, BleakScanner
-
-# Local application imports
 from fail_safe import fail_safe
 from PySide6.QtCore import QObject, Signal, Slot
 

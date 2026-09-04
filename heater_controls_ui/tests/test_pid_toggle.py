@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Hardware-free tests for the PID toggle / stream transitions (frontend side).
 
 The controller is a direct port of the legacy standalone UI's slots: every
@@ -7,10 +17,13 @@ backend executes the legacy stop -> delay -> start serial sequence atomically
 `publish_message` is monkeypatched at the controller module.
 """
 
+# Standard library imports.
 import json
 
+# Third-party imports.
 import pytest
 
+# Microdrop package imports.
 import heater_controls_ui.controller as controller_mod
 from heater_controller.consts import (
     SET_PWM,

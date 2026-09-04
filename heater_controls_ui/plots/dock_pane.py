@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater Plots dock pane.
 
 A lean pyface DockPane with two tabs: the live matplotlib canvas and the
@@ -8,6 +18,7 @@ enabled / clear_requested) — the canvas reads those on its timer, keeping
 the model/view separation intact.
 """
 
+# Third-party imports.
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -18,14 +29,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+# Enthought library imports.
 from pyface.tasks.dock_pane import DockPane
 from traits.api import Any, Instance
 
+# Microdrop package imports.
 from heater_controls_ui.consts import plot_listener_name
 
+# Microdrop style imports.
 from microdrop_style.fonts.fontnames import ICON_FONT_FAMILY
 from microdrop_style.icons.icons import ICON_PAUSE, ICON_PLAY, ICON_RESUME, ICON_STOP
 
+# Local imports.
 from .canvas import HeaterPlotCanvas
 from .consts import (
     CLEAR_PLOT_ICON,
@@ -44,6 +59,7 @@ from .log_view import HeaterLogViewerController, LogView
 from .message_handler import HeaterPlotMessageHandler
 from .model import HeaterPlotModel
 
+# Logger import.
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)

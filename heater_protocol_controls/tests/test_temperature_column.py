@@ -1,7 +1,19 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Hardware-free tests for the heater temperature protocol column."""
 
+# Standard library imports.
 import json
 
+# Microdrop package imports.
 import heater_protocol_controls.protocol_columns.temperature_column as tc_mod
 from heater_controller.consts import PROTOCOL_SET_TEMPERATURE, TEMPERATURE_REACHED
 from heater_protocol_controls.consts import SET_TEMPERATURE_FIELD_ID

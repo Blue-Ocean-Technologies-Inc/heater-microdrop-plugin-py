@@ -1,7 +1,20 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
+# Standard library imports.
 import json
 
+# Enthought library imports.
 from traits.api import Instance
 
+# Microdrop package imports.
 from heater_controller.compensation import HeaterCompensationPreferences
 from heater_controller.consts import (
     FIRMWARE_UPLOAD_FINISHED,
@@ -10,12 +23,14 @@ from heater_controller.consts import (
 )
 from template_status_and_controls.base_message_handler import BaseMessageHandler
 
+# Local imports.
 from .consts import PWM_MAX, PWM_MIN
 from .live_state import heater_live_state
 from .model import HeaterStatusModel
 from .sensor_config.model import SensorConfigModel
 from .telemetry import format_telemetry, resolve_selection
 
+# Logger import.
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)

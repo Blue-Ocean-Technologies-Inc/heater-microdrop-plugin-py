@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater temperature compound column — drives a heater to a target temperature
 for a protocol step and blocks the step until the PID temperature is within a
 tolerance band of the target.
@@ -15,11 +25,14 @@ TEMPERATURE_REACHED once within tolerance — which the step's ``ctx.wait_for``
 is blocking on.
 """
 
+# Standard library imports.
 import json
 
+# Enthought library imports.
 from pyface.qt.QtCore import Qt
 from traits.api import Bool, Float
 
+# Microdrop package imports.
 from heater_controller.compensation import compensate_setpoint_from_preferences
 from heater_controller.consts import (
     DEFAULT_HEATER,
@@ -37,8 +50,10 @@ from pluggable_protocol_tree.models.compound_column import (
 from pluggable_protocol_tree.views.columns.checkbox import CheckboxColumnView
 from pluggable_protocol_tree.views.columns.spinbox import DoubleSpinBoxColumnView
 
+# Microdrop utils imports.
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 
+# Local imports.
 from ..consts import SET_TEMPERATURE_FIELD_ID
 
 # Sensible defaults / spinbox ranges (mirror the heater UI's setpoint range).

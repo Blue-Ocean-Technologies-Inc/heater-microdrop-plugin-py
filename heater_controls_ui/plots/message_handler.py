@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Dramatiq listener that feeds the heater plot model.
 
 Runs as its own listener (see ``plot_listener_name``), so the plot pane is
@@ -8,17 +18,22 @@ reports in telemetry (the plain stream carries no duty at all, so without the
 echo the PWM line froze at its last closed-loop value while in PWM mode).
 """
 
+# Standard library imports.
 import json
 
+# Enthought library imports.
 from traits.api import Instance
 
+# Microdrop package imports.
 from heater_controller.consts import DEFAULT_HEATER
 from heater_controls_ui.telemetry import telemetry_samples
 from template_status_and_controls.base_message_handler import BaseMessageHandler
 
+# Local imports.
 from .log_model import HeaterLogViewerModel
 from .model import HeaterPlotModel
 
+# Logger import.
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)

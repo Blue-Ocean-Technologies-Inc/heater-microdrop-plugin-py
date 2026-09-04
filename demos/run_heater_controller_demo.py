@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater controller backend demo.
 
 Starts the heater backend, kicks off connection monitoring, and lets the
@@ -13,12 +23,14 @@ VID:PID=2E8A:0005. Without the heater, the monitor just keeps polling.
 """
 
 # sys imports
+
+# Standard library imports.
 import os
 import sys
 import threading
 import time
 
-# enthought imports
+# Enthought library imports.
 from envisage.api import CorePlugin
 from envisage.application import Application
 

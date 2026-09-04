@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """TraitsUI panel for the heater Log Viewer tab.
 
 Mirrors the Recording Viewer's browsing surface: a folder button (defaults
@@ -7,11 +17,14 @@ the matplotlib pan/zoom/save/configure toolbar. Embedded in the Heater
 Plots dock pane as its second tab (``edit_traits(kind="subpanel")``).
 """
 
+# Standard library imports.
 from pathlib import Path
 
+# Third-party imports.
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from PySide6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
+# Enthought library imports.
 from pyface.api import OK, DirectoryDialog
 from traits.api import Button, Instance, observe
 from traitsui.api import (
@@ -26,21 +39,26 @@ from traitsui.api import (
     View,
 )
 
+# Microdrop package imports.
 from heater_controller.consts import HEATER_LOGS_DIR_NAME
 from microdrop_application.helpers import get_current_experiment_directory
 
+# Microdrop style imports.
 from microdrop_style.icons.icons import (
     ICON_FOLDER_OPEN,
     ICON_HOME,
     ICON_REFRESH,
 )
 
+# Microdrop utils imports.
 from microdrop_utils.traitsui_qt_helpers import IconButtonEditor
 
+# Local imports.
 from .consts import LOG_FILE_GLOB
 from .log_canvas import HeaterLogPlotCanvas
 from .log_model import HeaterLogViewerModel
 
+# Logger import.
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)

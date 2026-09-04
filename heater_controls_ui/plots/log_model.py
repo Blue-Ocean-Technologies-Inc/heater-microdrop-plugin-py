@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Qt-free HasTraits model for the heater log viewer tab: the browsed
 heater_logs folder, its discovered ``.jsonl`` telemetry logs (written by
 heater_controller.data_logger), and the loaded log's plottable series.
@@ -5,10 +15,12 @@ Static — a log is parsed once when selected. Mutated only on the GUI
 thread (toolbar buttons, combo selection), so no Qt bridging is needed.
 """
 
+# Standard library imports.
 import json
 from datetime import datetime
 from pathlib import Path
 
+# Enthought library imports.
 from traits.api import (
     Dict,
     Directory,
@@ -20,10 +32,13 @@ from traits.api import (
     Str,
 )
 
+# Microdrop package imports.
 from heater_controls_ui.telemetry import telemetry_samples
 
+# Local imports.
 from .consts import LOG_TIME_DISPLAY_FORMAT
 
+# Logger import.
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)

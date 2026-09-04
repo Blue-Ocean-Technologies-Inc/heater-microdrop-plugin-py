@@ -1,11 +1,23 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Qt-free model for the Configure Sensors & Heaters editor.
 
 The message handler feeds it the board's ``dump_config`` document and scan
 results (via :mod:`.parsing`); the view renders the two row lists as tables.
 """
 
+# Enthought library imports.
 from traits.api import Bool, Dict, HasTraits, Instance, List, Str, observe
 
+# Local imports.
 from .parsing import (
     heater_rows,
     parse_board_config,

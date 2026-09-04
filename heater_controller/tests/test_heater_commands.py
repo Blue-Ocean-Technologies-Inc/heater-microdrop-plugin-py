@@ -1,13 +1,26 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Hardware-free tests for the heater typed-command formatting.
 
 Each typed request validates a JSON payload and formats the matching plain-text
 command; these assert the wire strings without touching a serial port.
 """
 
+# Standard library imports.
 import threading
 
+# Third-party imports.
 import pytest
 
+# Microdrop package imports.
 from heater_controller.heater_serial_proxy import HeaterSerialProxy
 from heater_controller.services.heater_command_setter_service import (
     HeaterCommandSetterService,

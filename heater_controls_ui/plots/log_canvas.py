@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Static matplotlib canvas for a loaded heater telemetry log.
 
 The temperature plot of the live pane, drawn once per loaded log (the
@@ -7,6 +17,7 @@ Legend entries are clickable and toggle series exactly like the live
 canvas; pan/zoom/save come from the matplotlib toolbar the view adds.
 """
 
+# Standard library imports.
 import os
 
 os.environ.setdefault("QT_API", "pyside6")

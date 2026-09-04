@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Handler for the Configure Sensors & Heaters dialog.
 
 Button actions publish board requests (scan / refresh / save-and-push) and save
@@ -6,13 +16,17 @@ the heater message handler into the shared SensorConfigModel, so the dialog
 never touches the serial port itself.
 """
 
+# Standard library imports.
 import json
 
+# Third-party imports.
 from pydantic import ValidationError
 
+# Enthought library imports.
 from pyface.api import YES
 from traitsui.api import Controller
 
+# Microdrop package imports.
 from heater_controller.consts import DUMP_CONFIG, SAVE_CONFIG_TO_BOARD, SCAN_SENSORS
 from heater_controller.datamodels import HeaterConfigEdit, SensorNaming
 from microdrop_application.dialogs.pyface_wrapper import (
@@ -22,11 +36,14 @@ from microdrop_application.dialogs.pyface_wrapper import (
     information,
 )
 
+# Microdrop utils imports.
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from microdrop_utils.traitsui_qt_helpers import stretch_group_layouts_horizontally
 
+# Local imports.
 from .parsing import build_board_config, split_sensor_names, thermistor_names
 
+# Logger import.
 from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
