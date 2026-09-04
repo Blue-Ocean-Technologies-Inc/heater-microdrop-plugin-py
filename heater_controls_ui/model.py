@@ -1,16 +1,39 @@
-from traits.api import Str, List, Bool, Event, Enum, HasTraits, Instance, observe
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
 
+# Enthought library imports.
+from traits.api import Bool, Enum, Event, HasTraits, Instance, List, Str, observe
+
+# Microdrop package imports.
 from template_status_and_controls.base_model import BaseStatusModel
+
+# Microdrop utils imports.
 from microdrop_utils.traitsui_qt_helpers import RangeWithSteppedSpinViewHint
 
+# Local imports.
 from .consts import (
-    disconnected_color, connected_color, halted_color,
-    TEMPERATURE_MIN, TEMPERATURE_MAX, TEMPERATURE_DEFAULT,
-    PWM_MIN, PWM_MAX, PWM_DEFAULT,
+    PWM_DEFAULT,
+    PWM_MAX,
+    PWM_MIN,
+    TEMPERATURE_DEFAULT,
+    TEMPERATURE_MAX,
+    TEMPERATURE_MIN,
+    connected_color,
+    disconnected_color,
+    halted_color,
 )
 from .telemetry import reconcile_readouts
 
+# Logger import.
 from logger.logger_service import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -19,6 +42,7 @@ class HeaterReadout(HasTraits):
     sensor reading; pwm is the regulated duty in Temp mode or the commanded duty
     in PWM mode. Both display strings carry their own units, so the view shows
     them label-free."""
+
     name = Str()
     temperature_display = Str("-")
     pwm_display = Str("-")
@@ -33,7 +57,7 @@ class HeaterStatusModel(BaseStatusModel):
     """
 
     # ---- Class-level constants ----------------------------------------
-    DEFAULT_ICON_PATH = ""          # no device picture for the heater pane
+    DEFAULT_ICON_PATH = ""  # no device picture for the heater pane
     CHIP_INSERTED_ICON_PATH = ""
     DISCONNECTED_COLOR = disconnected_color
     # No "connected but no chip" state — connected is green outright.
@@ -50,11 +74,17 @@ class HeaterStatusModel(BaseStatusModel):
 
     # ---- Setpoint controls (range + units, like voltage/frequency) ------
     temperature = RangeWithSteppedSpinViewHint(
-        TEMPERATURE_MIN, TEMPERATURE_MAX, value=TEMPERATURE_DEFAULT, suffix=" °C",
+        TEMPERATURE_MIN,
+        TEMPERATURE_MAX,
+        value=TEMPERATURE_DEFAULT,
+        suffix=" °C",
         desc="PID setpoint to apply (°C)",
     )
     pwm = RangeWithSteppedSpinViewHint(
-        PWM_MIN, PWM_MAX, value=PWM_DEFAULT, suffix=" %",
+        PWM_MIN,
+        PWM_MAX,
+        value=PWM_DEFAULT,
+        suffix=" %",
         desc="Open-loop duty to apply (%)",
     )
 
@@ -62,13 +92,20 @@ class HeaterStatusModel(BaseStatusModel):
     # "PWM": open-loop — the duty is driven directly. "Temp": closed-loop —
     # the backend's PID auto-drives the duty toward the temperature setpoint.
     # Temp first → the default (closed-loop PID) when the pane first opens.
-    mode = Enum("Temp", "PWM", desc="Open-loop PWM duty vs closed-loop temperature (PID)")
+    mode = Enum(
+        "Temp", "PWM", desc="Open-loop PWM duty vs closed-loop temperature (PID)"
+    )
     # Sensor group used for streaming and PID input, matching the legacy UI's
     # dropdown: "all" streams/regulates on every sensor (the default), the
     # named groups restrict to that bus, and "None" omits the group suffix so
     # the board falls back to its default sensor.
-    sensor_group = Enum("all", "thermistors", "onewire", "None",
-                        desc="Sensor group for streaming/PID (None = board default)")
+    sensor_group = Enum(
+        "all",
+        "thermistors",
+        "onewire",
+        "None",
+        desc="Sensor group for streaming/PID (None = board default)",
+    )
     # Dedicated PID on/off toggle. PID on implies Temp mode (the controller
     # forces it and the view locks the mode toggle): the board enters PID by
     # receiving a temperature setpoint and leaves it via pid_stop + a plain
@@ -81,7 +118,9 @@ class HeaterStatusModel(BaseStatusModel):
     # observers skip publishing while set, so board echoes never loop back
     # into commands (the legacy Qt UI relied on setChecked() not firing
     # `clicked`; trait observers fire on every assignment, hence this guard).
-    updating_from_board = Bool(False, desc="Model change originates from board telemetry")
+    updating_from_board = Bool(
+        False, desc="Model change originates from board telemetry"
+    )
     # Master gate: while off, nothing streams from the board and we send it no
     # setpoint commands (edits are staged and applied when streaming starts).
     stream_active = Bool(False, desc="Telemetry streaming active")
@@ -110,7 +149,9 @@ class HeaterStatusModel(BaseStatusModel):
     # pane shows a one-time warning in response.
     stream_off_edit_warning = Event()
 
-    _tec_heater_present = Bool(False, desc="whether any TEC heater is available on the board")
+    _tec_heater_present = Bool(
+        False, desc="whether any TEC heater is available on the board"
+    )
     fan_enabled = Bool(False)
 
     # ------------------------------------------------------------------ #
@@ -124,7 +165,8 @@ class HeaterStatusModel(BaseStatusModel):
         self._tec_heater_present = any("tec" in el for el in event.new)
 
         self.heater_readouts = reconcile_readouts(
-            self.heater_readouts, self.available_heaters,
+            self.heater_readouts,
+            self.available_heaters,
             lambda name: HeaterReadout(name=name),
         )
 

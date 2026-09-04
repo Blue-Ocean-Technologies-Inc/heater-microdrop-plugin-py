@@ -1,5 +1,8 @@
 # heater-microdrop-plugin
 
+[![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-orange.json)](https://github.com/copier-org/copier)
+[![Template](https://img.shields.io/badge/template-microdrop--plugin--template%40v0.1.0-blue)](https://github.com/Blue-Ocean-Technologies-Inc/microdrop-plugin-template)
+
 MicroDrop heater plugin, packaged as an installable conda package:
 
 - `heater_controller/` — backend board driver (telemetry, PID/PWM commands,

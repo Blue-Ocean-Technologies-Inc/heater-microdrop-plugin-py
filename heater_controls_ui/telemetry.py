@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Pure helpers that turn heater backend signals into model updates.
 
 No Qt / traits / dramatiq here, so these are straightforward to unit-test.
@@ -26,7 +36,7 @@ def heater_from_frame(frame):
     """The heater a ``PID_<HEATER>`` telemetry frame belongs to (e.g.
     ``PID_HEATER1`` -> ``heater1``), or None for frames that aren't per-heater."""
     if frame.startswith("PID_"):
-        return frame[len("PID_"):].lower()
+        return frame[len("PID_") :].lower()
     return None
 
 
@@ -59,8 +69,11 @@ def telemetry_samples(data):
     out = {}
     temps = data.get("temperatures") or {}
     if isinstance(temps, dict):
-        clean = {name: float(value) for name, value in temps.items()
-                 if isinstance(value, (int, float)) and value > INVALID_TEMP_THRESHOLD}
+        clean = {
+            name: float(value)
+            for name, value in temps.items()
+            if isinstance(value, (int, float)) and value > INVALID_TEMP_THRESHOLD
+        }
         if clean:
             out["temperatures"] = clean
 

@@ -1,13 +1,32 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """TraitsUI view for the Configure Sensors & Heaters dialog.
 
 Scan the bus / refresh from board, edit sensor names + heater assignments, then
 Save to file or Save & push to board.
 """
+
+# Enthought library imports.
 from traitsui.api import (
-    View, UItem, VGroup, Tabbed, TableEditor, Action, OKButton,
+    Action,
+    OKButton,
+    Tabbed,
+    TableEditor,
+    UItem,
+    VGroup,
+    View,
 )
 
-from microdrop_utils.traitsui_qt_helpers import ObjectColumn, HtmlLabelEditor
+# Microdrop utils imports.
+from microdrop_utils.traitsui_qt_helpers import HtmlLabelEditor, ObjectColumn
 
 # All three top labels render as word-wrapped rich text (HtmlLabelEditor), so a
 # long help line wraps instead of forcing the pane wide.
@@ -15,13 +34,16 @@ help_label = HtmlLabelEditor()  # plain, word-wrapped
 # Muted, italic styling for the secondary/reference labels. ``{}`` is the value.
 _MUTED = "color:#888; font-style:italic;"
 source_label = HtmlLabelEditor(
-    template=f'<span style="{_MUTED}">Config source: {{}}</span>')
+    template=f'<span style="{_MUTED}">Config source: {{}}</span>'
+)
 # Scan result summary — non-italic and a touch stronger than the muted labels so
 # the operator's eye lands on it right after pressing "Scan for sensors".
 scan_summary_label = HtmlLabelEditor(
-    template='<span style="color:#555; font-weight:bold;">{}</span>')
+    template='<span style="color:#555; font-weight:bold;">{}</span>'
+)
 available_label = HtmlLabelEditor(
-    template=f'<span style="{_MUTED}">Available sensors: {{}}</span>')
+    template=f'<span style="{_MUTED}">Available sensors: {{}}</span>'
+)
 push_status_label = HtmlLabelEditor(template=f'<span style="{_MUTED}">{{}}</span>')
 
 # The Name (sensors) and Sensors (heater assignments) columns are editable; the
@@ -34,7 +56,7 @@ sensors_table = TableEditor(
     ],
     editable=True,
     sortable=False,
-    auto_size=True,   # size columns to their contents so no cell text is clipped
+    auto_size=True,  # size columns to their contents so no cell text is clipped
 )
 
 heaters_table = TableEditor(
@@ -45,7 +67,7 @@ heaters_table = TableEditor(
     ],
     editable=True,
     sortable=False,
-    auto_size=True,   # size columns to their contents so no cell text is clipped
+    auto_size=True,  # size columns to their contents so no cell text is clipped
 )
 
 scan_action = Action(name="Scan for sensors", action="scan_sensors")
@@ -57,8 +79,7 @@ SensorConfigView = View(
     VGroup(
         UItem("help_text", editor=help_label),
         UItem("source", editor=source_label),
-        UItem("scan_summary", editor=scan_summary_label,
-              visible_when="scan_summary"),
+        UItem("scan_summary", editor=scan_summary_label, visible_when="scan_summary"),
         Tabbed(
             UItem("sensors", editor=sensors_table, label="Sensors"),
             VGroup(
@@ -67,8 +88,7 @@ SensorConfigView = View(
                 label="Heater Assignments",
             ),
         ),
-        UItem("push_status", editor=push_status_label,
-              visible_when="push_status"),
+        UItem("push_status", editor=push_status_label, visible_when="push_status"),
     ),
     title="Configure Sensors && Heaters",
     width=640,

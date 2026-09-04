@@ -1,19 +1,39 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
+# Standard library imports.
 import json
 
-from heater_controller.datamodels import SetFanData
-from traits.api import observe
+# Enthought library imports.
 from pyface.qt.QtWidgets import QSizePolicy
+from traits.api import observe
 
+# Microdrop package imports.
+from heater_controller.compensation import compensate_setpoint_from_preferences
+from heater_controller.consts import (
+    SET_FAN,
+    SET_PWM,
+    SET_TEMPERATURE,
+    START_STREAM,
+    STOP_STREAM,
+)
+from heater_controller.datamodels import SetFanData
 from template_status_and_controls.base_controller import BaseStatusController
+
+# Microdrop utils imports.
 from microdrop_utils.decorators import debounce
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 from microdrop_utils.traitsui_qt_helpers import stretch_group_layouts_horizontally
-from logger.logger_service import get_logger
 
-from heater_controller.compensation import compensate_setpoint_from_preferences
-from heater_controller.consts import (
-    SET_TEMPERATURE, SET_PWM, START_STREAM, STOP_STREAM, SET_FAN,
-)
+# Logger import.
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -101,7 +121,8 @@ class HeaterControlsController(BaseStatusController):
         payload = self._group_payload(pid=self.model.pid_enabled)
         if self.model.pid_enabled:
             payload["temperature"] = compensate_setpoint_from_preferences(
-                self.model.temperature)
+                self.model.temperature
+            )
         elif self.model.mode == "PWM":
             payload["pwm"] = self.model.pwm
             self._echo_commanded_pwm(self.model.pwm)
@@ -130,7 +151,10 @@ class HeaterControlsController(BaseStatusController):
             self._publish(SET_TEMPERATURE, self._group_payload(temperature=temperature))
             logger.info(f"Temperature --> {temperature} °C (base {event.new} °C)")
         else:
-            logger.debug(f"Temperature setpoint {event.new} °C staged (stream off or pid mode disabled)")
+            logger.debug(
+                f"Temperature setpoint {event.new} °C staged (stream off or "
+                f"pid mode disabled)"
+            )
             self.model.stream_off_edit_warning = True
 
     @observe("model:pwm")
@@ -180,16 +204,22 @@ class HeaterControlsController(BaseStatusController):
         new mode (the backend runs the stop -> delay -> start sequence);
         otherwise the flip is staged for the next stream start."""
         if self.model.updating_from_board:
-            return                      # board-reported state, not a user flip
+            return  # board-reported state, not a user flip
         if event.new:
             # PID owns the temperature loop: force Temp mode. The mode
             # observer skips publishing while pid_enabled is on.
             self.model.mode = "Temp"
         if self.model.stream_active:
-            logger.info(f"Heater UI: PID {'enabled' if event.new else 'disabled'}, restarting stream")
+            logger.info(
+                f"Heater UI: PID {'enabled' if event.new else 'disabled'}, "
+                f"restarting stream"
+            )
             self.start_stream()
         else:
-            logger.info(f"Heater UI: PID {'enabled' if event.new else 'disabled'} (applies on next stream start)")
+            logger.info(
+                f"Heater UI: PID {'enabled' if event.new else 'disabled'} "
+                f"(applies on next stream start)"
+            )
 
     @observe("model:stream_active")
     def _on_stream_active_changed(self, event):
@@ -203,4 +233,6 @@ class HeaterControlsController(BaseStatusController):
     @observe("model:fan_enabled")
     def _on_fan_enabled_changed(self, event):
         logger.debug(f"Processing fan enabled request event: {event}")
-        publish_message(topic=SET_FAN, message=SetFanData(on=event.new).model_dump_json())
+        publish_message(
+            topic=SET_FAN, message=SetFanData(on=event.new).model_dump_json()
+        )

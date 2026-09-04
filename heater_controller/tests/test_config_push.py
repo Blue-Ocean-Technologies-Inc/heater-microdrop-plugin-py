@@ -1,26 +1,42 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Hardware-free tests for the save-config-to-board push orchestration.
 
 mpremote, the serial proxy, and message publishing are all stubbed, so this
 exercises only the ordering: validate payload -> release the port -> run
 mpremote -> always reconnect -> publish the result.
 """
+
+# Standard library imports.
 import json
 import threading
 
+# Third-party imports.
 import pytest
 
+# Microdrop package imports.
 import heater_controller.services.heater_config_service as svc_mod
-from heater_controller.services.heater_config_service import HeaterConfigService
-from heater_controller.heater_serial_proxy import HeaterSerialProxy
 from heater_controller.consts import CONFIG_PUSHED, DISCONNECTED
+from heater_controller.heater_serial_proxy import HeaterSerialProxy
+from heater_controller.services.heater_config_service import HeaterConfigService
 
-
-CONFIG = {"heaters": {"t": {"type": "tec", "sensors": ["s"]}},
-          "temperature_sensors": {"1-wire-sensors": {"s": "28aa"}}}
+CONFIG = {
+    "heaters": {"t": {"type": "tec", "sensors": ["s"]}},
+    "temperature_sensors": {"1-wire-sensors": {"s": "28aa"}},
+}
 
 
 class _FakeProxy(HeaterSerialProxy):
     """A HeaterSerialProxy that never opens a port (so Instance(...) accepts it)."""
+
     def __init__(self):
         self.port = "COM7"
         self.terminated = False
@@ -38,15 +54,18 @@ class _Msg:
 @pytest.fixture
 def published(monkeypatch):
     sink = []
-    monkeypatch.setattr(svc_mod, "publish_message",
-                        lambda message, topic=None, **k: sink.append((topic, message)))
+    monkeypatch.setattr(
+        svc_mod,
+        "publish_message",
+        lambda message, topic=None, **k: sink.append((topic, message)),
+    )
     return sink
 
 
 def _service(mpremote_raises=None):
     service = HeaterConfigService()
     service.proxy = _FakeProxy()
-    service.disconnected_topic = DISCONNECTED   # supplied by the composed base
+    service.disconnected_topic = DISCONNECTED  # supplied by the composed base
     calls = []
 
     def fake_mpremote(port, *args):
@@ -67,9 +86,9 @@ def test_push_success_releases_port_copies_resets_and_reconnects(published):
     proxy = service.proxy
     service.on_save_config_to_board_request(_Msg(json.dumps(CONFIG)))
 
-    assert proxy.terminated and service.proxy is None       # serial port released
-    assert calls == ["cp", "reset"]                          # copy then reboot
-    assert DISCONNECTED in [t for t, _ in published]         # reconnect triggered
+    assert proxy.terminated and service.proxy is None  # serial port released
+    assert calls == ["cp", "reset"]  # copy then reboot
+    assert DISCONNECTED in [t for t, _ in published]  # reconnect triggered
     assert _result(published)["ok"] is True
 
 
@@ -77,7 +96,7 @@ def test_push_failure_still_reconnects_and_reports_error(published):
     service, _ = _service(mpremote_raises="boom")
     service.on_save_config_to_board_request(_Msg(json.dumps(CONFIG)))
 
-    assert DISCONNECTED in [t for t, _ in published]         # reconnect regardless
+    assert DISCONNECTED in [t for t, _ in published]  # reconnect regardless
     result = _result(published)
     assert result["ok"] is False and "boom" in result["message"]
 
@@ -87,6 +106,6 @@ def test_push_invalid_payload_leaves_connection_untouched(published):
     proxy = service.proxy
     service.on_save_config_to_board_request(_Msg("not json"))
 
-    assert not proxy.terminated and service.proxy is proxy   # nothing released
+    assert not proxy.terminated and service.proxy is proxy  # nothing released
     assert calls == []
     assert _result(published)["ok"] is False

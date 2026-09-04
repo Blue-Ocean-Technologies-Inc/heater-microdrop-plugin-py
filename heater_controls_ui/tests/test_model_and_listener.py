@@ -1,16 +1,29 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Hardware-free tests for the heater controls UI logic.
 
 Covers the pure helpers that turn backend signals into model state: the heater
 dropdown selection rules and the telemetry-to-readout formatting.
 """
-import pytest
 
+# Microdrop package imports.
 from heater_controls_ui.telemetry import (
-    resolve_selection, format_telemetry, reconcile_readouts, heater_from_frame,
+    format_telemetry,
+    heater_from_frame,
+    reconcile_readouts,
+    resolve_selection,
 )
 
-
 # --- dropdown selection -----------------------------------------------------
+
 
 def test_resolve_selection_defaults_to_first_when_unset():
     assert resolve_selection("", ["tec1", "tec2"]) == {"selected_heater": "tec1"}
@@ -29,6 +42,7 @@ def test_resolve_selection_empty_list_no_change():
 
 
 # --- telemetry formatting ---------------------------------------------------
+
 
 def test_heater_from_frame():
     assert heater_from_frame("PID_HEATER1") == "heater1"
@@ -88,17 +102,22 @@ def test_format_telemetry_invalid_temp_sentinel_resets_display():
 def test_format_telemetry_whoami_has_no_display_updates():
     # WHOAMI is intercepted by the serial proxy and published as the BOARD_ID
     # signal; if one ever leaked into telemetry it must not update readouts.
-    heater, out = format_telemetry({"_frame": "WHOAMI", "device_id": "heater-7", "uid": "abc"})
+    heater, out = format_telemetry(
+        {"_frame": "WHOAMI", "device_id": "heater-7", "uid": "abc"}
+    )
     assert heater is None
     assert out == {}
 
 
 def test_format_telemetry_err_and_info_frames_have_no_display_updates():
-    assert format_telemetry({"_frame": "ERR", "heater": "tec1", "message": "overtemp"}) == (None, {})
+    assert format_telemetry(
+        {"_frame": "ERR", "heater": "tec1", "message": "overtemp"}
+    ) == (None, {})
     assert format_telemetry({"_frame": "INFO", "event": "pid_started"}) == (None, {})
 
 
 # --- per-heater readout reconciliation --------------------------------------
+
 
 class _Row:
     def __init__(self, name):
@@ -114,5 +133,5 @@ def test_reconcile_readouts_reuses_existing_instances():
     existing = [_Row("heater1"), _Row("heater2")]
     rows = reconcile_readouts(existing, ["heater2", "heater3"], _Row)
     assert [r.name for r in rows] == ["heater2", "heater3"]
-    assert rows[0] is existing[1]            # heater2 instance preserved
-    assert rows[1] not in existing           # heater3 freshly built
+    assert rows[0] is existing[1]  # heater2 instance preserved
+    assert rows[1] not in existing  # heater3 freshly built

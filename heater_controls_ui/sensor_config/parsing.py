@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Pure helpers that turn the board's ``dump_config`` JSON and 1-Wire scan
 results into the two configurator tables. No Qt / traits here, so these are
 straightforward to unit-test.
@@ -13,9 +23,12 @@ Config document shape (from the firmware ``dump_config``)::
       "heaters": {"<heater>": {"type": "...", "sensors": ["<name>", ...]}, ...}
     }
 """
+
+# Standard library imports.
 import copy
 import json
 
+# Microdrop package imports.
 from heater_controller.consts import OW_RESERVED_KEYS
 
 # Bus-level keys inside ``1-wire-sensors`` that are NOT sensor name->ROM entries.
@@ -34,7 +47,7 @@ def parse_board_config(config_text):
 def _ow_name_to_rom(config):
     """``{rom_lower: name}`` for the 1-Wire sensors defined in the config
     (excluding the reserved bus-level keys)."""
-    ow = ((config.get("temperature_sensors") or {}).get("1-wire-sensors") or {})
+    ow = (config.get("temperature_sensors") or {}).get("1-wire-sensors") or {}
     return {
         rom.lower(): name
         for name, rom in ow.items()
@@ -45,7 +58,7 @@ def _ow_name_to_rom(config):
 def thermistor_names(config):
     """Names of the thermistors defined in the config (used as valid sensor
     references for heater assignments)."""
-    thermistors = ((config.get("temperature_sensors") or {}).get("thermistors") or {})
+    thermistors = (config.get("temperature_sensors") or {}).get("thermistors") or {}
     return list(thermistors.keys()) if isinstance(thermistors, dict) else []
 
 
@@ -67,11 +80,13 @@ def sensor_rows(config, scanned_roms, scan_done):
     scanned = {r.lower() for r in (scanned_roms or []) if isinstance(r, str)}
     rows = []
     for rom in sorted(set(by_rom) | scanned):
-        rows.append({
-            "rom": rom,
-            "name": by_rom.get(rom, ""),
-            "status": _sensor_status(rom in by_rom, rom in scanned, scan_done),
-        })
+        rows.append(
+            {
+                "rom": rom,
+                "name": by_rom.get(rom, ""),
+                "status": _sensor_status(rom in by_rom, rom in scanned, scan_done),
+            }
+        )
     return rows
 
 
@@ -89,8 +104,7 @@ def scan_summary(config, scanned_roms, scan_done):
     matched = len(scanned & by_rom)
     new = len(scanned - by_rom)
     missing = len(by_rom - scanned)
-    summary = (f"Scan complete: {matched + new} on bus "
-               f"({matched} matched, {new} new)")
+    summary = f"Scan complete: {matched + new} on bus ({matched} matched, {new} new)"
     if missing:
         entries = "entry" if missing == 1 else "entries"
         summary += f". {missing} config {entries} not found on bus"
@@ -109,7 +123,9 @@ def heater_rows(config):
                 continue
             sensors = cfg.get("sensors") or []
             joined = ", ".join(s for s in sensors if isinstance(s, str))
-            rows.append({"heater": name, "type": str(cfg.get("type", "")), "sensors": joined})
+            rows.append(
+                {"heater": name, "type": str(cfg.get("type", "")), "sensors": joined}
+            )
     return rows
 
 
