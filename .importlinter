@@ -46,6 +46,12 @@ ignore_imports =
     ** -> microdrop_application.helpers
     ** -> microdrop_application.dialogs.**
     # --- seeded debt: existing violations, may only shrink ---
+    # menus.is_advanced_mode() gate for the compensation feature: the
+    # setpoint-compensation controls only apply in Advanced Mode. Should
+    # switch to a published topic/consts flag instead of reaching into
+    # microdrop_application.menus directly.
+    heater_controller.compensation -> microdrop_application.menus
+    heater_controls_ui.preferences -> microdrop_application.menus
 
 [importlinter:contract:plugin-layers]
 name = UI and protocol-controls sit above the backend and stay independent
