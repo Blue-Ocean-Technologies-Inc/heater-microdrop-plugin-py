@@ -1,0 +1,28 @@
+_commit: v0.1.0
+_src_path: https://github.com/Blue-Ocean-Technologies-Inc/microdrop-plugin-template.git
+anchor_package: heater_controller
+backend_group_label: Heater backend (board driver)
+backend_plugins:
+- heater_controller.plugin:HeaterControllerPlugin
+description: 'MicroDrop heater plugin: board driver, status/controls + plotting UI,
+    and protocol column'
+device_label: Heater
+device_name: heater
+entry_point_name: heater
+has_redis_gated_tests: false
+large_file_exclude: ''
+microdrop_dev_hooks_rev: v0.1.0
+optional_extras: {}
+package_name: heater-microdrop-plugin
+packages:
+- heater_controller
+- heater_controls_ui
+- heater_protocol_controls
+run_dependencies:
+    mpremote: '>=1.20'
+ui_group_label: Heater UI (status/controls and plotting dock-pane + protocol column
+    + statusbar icon)
+ui_plugins:
+- heater_controls_ui.plugin:HeaterControlsUiPlugin
+- heater_protocol_controls.plugin:HeaterProtocolControlsPlugin
+version: 1.10.1

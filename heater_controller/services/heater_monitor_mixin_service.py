@@ -1,13 +1,28 @@
-from traits.api import provides, Str, List
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
 
-from peripheral_device_controller_base.services.peripheral_device_monitor_mixin_service import (
+# Enthought library imports.
+from traits.api import List, Str, provides
+
+# Microdrop package imports.
+from peripheral_device_controller_base.services.peripheral_device_monitor_mixin_service import (  # noqa: E501 -- dotted module path can't be shortened
     PeripheralDeviceMonitorMixinService,
 )
-from logger.logger_service import get_logger
 
-from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
+# Local imports.
+from ..consts import DEVICE_ID_FRAGMENT, DEVICE_NAME, HEATER_HWID
 from ..heater_serial_proxy import HeaterSerialProxy
-from ..consts import HEATER_HWID, DEVICE_NAME, DEVICE_ID_FRAGMENT
+from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
+
+# Logger import.
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -15,8 +30,9 @@ logger = get_logger(__name__)
 @provides(IHeaterControlMixinService)
 class HeaterMonitorMixinService(PeripheralDeviceMonitorMixinService):
     """Monitors for the heater controller (RP2040) connection."""
+
     id = Str(f"{DEVICE_NAME}_monitor_mixin_service")
-    name = Str(f'{DEVICE_NAME.title()} Monitor Mixin')
+    name = Str(f"{DEVICE_NAME.title()} Monitor Mixin")
 
     _default_hwids = List(Str, [HEATER_HWID])
 
@@ -31,4 +47,5 @@ class HeaterMonitorMixinService(PeripheralDeviceMonitorMixinService):
         return HeaterSerialProxy(
             port=str(port_name),
             expected_device_id_fragment=DEVICE_ID_FRAGMENT,
-            serial_instance=getattr(port_name, "serial", None))
+            serial_instance=getattr(port_name, "serial", None),
+        )

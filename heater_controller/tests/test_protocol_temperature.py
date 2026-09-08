@@ -1,11 +1,26 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Hardware-free tests for the protocol set-temperature watch + handler."""
+
+# Standard library imports.
 import json
 import threading
 
+# Microdrop package imports.
 import heater_controller.heater_serial_proxy as proxy_mod
-from heater_controller.heater_serial_proxy import HeaterSerialProxy
-from heater_controller.services.heater_command_setter_service import HeaterCommandSetterService
 from heater_controller.consts import TEMPERATURE_REACHED
+from heater_controller.heater_serial_proxy import HeaterSerialProxy
+from heater_controller.services.heater_command_setter_service import (
+    HeaterCommandSetterService,
+)
 
 
 class _Msg:
@@ -14,15 +29,18 @@ class _Msg:
 
 
 def _proxy():
-    p = HeaterSerialProxy.__new__(HeaterSerialProxy)   # no serial port opened
+    p = HeaterSerialProxy.__new__(HeaterSerialProxy)  # no serial port opened
     p._temp_watch = None
     return p
 
 
 def test_watch_acks_only_within_tolerance_for_the_right_heater(monkeypatch):
     pub = []
-    monkeypatch.setattr(proxy_mod, "publish_message",
-                        lambda message, topic, **k: pub.append((topic, message)))
+    monkeypatch.setattr(
+        proxy_mod,
+        "publish_message",
+        lambda message, topic, **k: pub.append((topic, message)),
+    )
     p = _proxy()
     p.set_temperature_target("tec1", 50.0, 1.0)
 
@@ -31,7 +49,7 @@ def test_watch_acks_only_within_tolerance_for_the_right_heater(monkeypatch):
     assert pub == [] and p._temp_watch is not None
 
     p._check_temperature_watch("PID_TEC1", {"pid_temperature": 49.4})  # within band
-    assert p._temp_watch is None                                       # disarmed
+    assert p._temp_watch is None  # disarmed
     topic, payload = pub[-1]
     assert topic == TEMPERATURE_REACHED
     assert json.loads(payload) == {"heater": "tec1", "temperature": 49.4}
@@ -39,8 +57,11 @@ def test_watch_acks_only_within_tolerance_for_the_right_heater(monkeypatch):
 
 def test_watch_disarms_after_ack(monkeypatch):
     pub = []
-    monkeypatch.setattr(proxy_mod, "publish_message",
-                        lambda message, topic, **k: pub.append((topic, message)))
+    monkeypatch.setattr(
+        proxy_mod,
+        "publish_message",
+        lambda message, topic, **k: pub.append((topic, message)),
+    )
     p = _proxy()
     p.set_temperature_target("tec1", 50.0, 1.0)
     p._check_temperature_watch("PID_TEC1", {"pid_temperature": 50.0})
@@ -67,15 +88,16 @@ def _run_protocol_set(proxy, heater="tec1"):
     service = HeaterCommandSetterService()
     service.proxy = proxy
     service.on_protocol_set_temperature_request(
-        _Msg(json.dumps({"heater": heater, "temperature": 60, "tolerance": 2})))
+        _Msg(json.dumps({"heater": heater, "temperature": 60, "tolerance": 2}))
+    )
     return proxy
 
 
 def test_protocol_handler_sets_target_and_arms_watch():
-    proxy = _run_protocol_set(_FakeProxy())   # no available list -> heater unchanged
+    proxy = _run_protocol_set(_FakeProxy())  # no available list -> heater unchanged
     assert "pid_tec1_enable" in proxy.sent
     assert "pid_tec1_60.0" in proxy.sent
-    assert "stream_all" in proxy.sent          # ensure telemetry flows
+    assert "stream_all" in proxy.sent  # ensure telemetry flows
     assert proxy.armed == ("tec1", 60.0, 2.0)
 
 
@@ -91,8 +113,11 @@ def test_protocol_handler_resolves_default_heater_to_real_channel():
 def test_watch_matches_resolved_heater_frame(monkeypatch):
     # Regression: watch armed for "heater1" must match a PID_HEATER1 frame.
     pub = []
-    monkeypatch.setattr(proxy_mod, "publish_message",
-                        lambda message, topic, **k: pub.append((topic, message)))
+    monkeypatch.setattr(
+        proxy_mod,
+        "publish_message",
+        lambda message, topic, **k: pub.append((topic, message)),
+    )
     p = _proxy()
     p.set_temperature_target("heater1", 50.0, 1.0)
     p._check_temperature_watch("PID_HEATER1", {"pid_temperature": 50.2})

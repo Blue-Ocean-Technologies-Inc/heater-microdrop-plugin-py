@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater UI preferences.
 
 A small PreferencesHelper on the SAME "Peripheral Settings" node the Z-Stage
@@ -9,15 +19,20 @@ Shown on the heater's own Heater Settings tab (previously rendered by the
 magnet plugin's shared Peripheral Settings pane).
 """
 
+# Enthought library imports.
 from envisage.ui.tasks.api import PreferencesCategory, PreferencesPane
 from traits.api import Bool, Directory
 from traitsui.api import Group, Item, View
 
-from microdrop_application.menus import is_advanced_mode
-from microdrop_style.text_styles import preferences_group_style_sheet
-from microdrop_utils.preferences_UI_helpers import create_item_label_group
-
+# Microdrop package imports.
 from heater_controller.compensation import HeaterCompensationPreferences
+from microdrop_application.menus import is_advanced_mode
+
+# Microdrop style imports.
+from microdrop_style.text_styles import preferences_group_style_sheet
+
+# Microdrop utils imports.
+from microdrop_utils.preferences_UI_helpers import create_item_label_group
 
 
 class HeaterPreferences(HeaterCompensationPreferences):

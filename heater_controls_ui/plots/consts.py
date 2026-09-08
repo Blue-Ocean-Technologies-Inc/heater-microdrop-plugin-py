@@ -1,9 +1,29 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Constants + brand-derived palettes for the heater plots."""
-from microdrop_style.colors import (
-    INFO_COLOR, WARNING_COLOR, ERROR_COLOR, SUCCESS_COLOR,
-    PRIMARY_SHADE, SECONDARY_SHADE, GREY, WHITE,
-)
+
+# Microdrop package imports.
 from heater_controls_ui.consts import PKG
+
+# Microdrop style imports.
+from microdrop_style.colors import (
+    ERROR_COLOR,
+    GREY,
+    INFO_COLOR,
+    PRIMARY_SHADE,
+    SECONDARY_SHADE,
+    SUCCESS_COLOR,
+    WARNING_COLOR,
+    WHITE,
+)
 
 # The plot dock pane's identity.
 PLOT_DOCK_PANE_ID = f"{PKG}.plot_dock_pane"
@@ -35,45 +55,55 @@ SETPOINT_SERIES_PREFIX = "target:"
 HIDDEN_LEGEND_ENTRY_ALPHA = 0.25
 
 # Pause / Stop plot buttons (checkable, icon-font glyphs).
-PAUSE_PLOT_TOOLTIP = ("Pause the plot. Data keeps arriving in the background; "
-                      "resume to continue (a gap marks the pause).")
-RESUME_PLOT_TOOLTIP = ("Resume the plot. Sampling and redraws pick back up "
-                       "from here (a gap marks the pause).")
-STOP_PLOT_TOOLTIP = ("Stop plotting entirely and discard the history. "
-                     "Use this if the plot slows the application down.")
-START_PLOT_TOOLTIP = ("Start plotting again. Stop discarded the history, so "
-                      "the plot begins empty from live telemetry.")
+PAUSE_PLOT_TOOLTIP = (
+    "Pause the plot. Data keeps arriving in the background; "
+    "resume to continue (a gap marks the pause)."
+)
+RESUME_PLOT_TOOLTIP = (
+    "Resume the plot. Sampling and redraws pick back up "
+    "from here (a gap marks the pause)."
+)
+STOP_PLOT_TOOLTIP = (
+    "Stop plotting entirely and discard the history. "
+    "Use this if the plot slows the application down."
+)
+START_PLOT_TOOLTIP = (
+    "Start plotting again. Stop discarded the history, so "
+    "the plot begins empty from live telemetry."
+)
 
 # Clear-plot button (momentary, not checkable). No suitable ICON_* exists in
 # microdrop_style.icons.icons for a "clear/sweep" glyph, so this is a Material
 # Symbols ligature name literal — same string-glyph style as ICON_PLAY /
 # ICON_PAUSE / ICON_RESUME — rendered through ICON_FONT_FAMILY.
 CLEAR_PLOT_ICON = "delete_sweep"
-CLEAR_PLOT_TOOLTIP = ("Clear the plotted history and recalibrate the axes to "
-                      "recent values. Telemetry keeps arriving in the "
-                      "background — this only resets the view, it does not "
-                      "pause or stop plotting.")
+CLEAR_PLOT_TOOLTIP = (
+    "Clear the plotted history and recalibrate the axes to "
+    "recent values. Telemetry keeps arriving in the "
+    "background — this only resets the view, it does not "
+    "pause or stop plotting."
+)
 
 # Categorical palette for per-sensor temperature lines — brand colours ordered
 # for high adjacent contrast, cycled when there are more sensors than colours.
 SENSOR_PALETTE = (
-    INFO_COLOR,             # blue
-    WARNING_COLOR,          # orange
-    PRIMARY_SHADE[600],     # green
-    SECONDARY_SHADE[500],   # indigo
-    PRIMARY_SHADE[300],     # light green
-    SECONDARY_SHADE[800],   # dark blue
-    GREY["dark"],           # grey
+    INFO_COLOR,  # blue
+    WARNING_COLOR,  # orange
+    PRIMARY_SHADE[600],  # green
+    SECONDARY_SHADE[500],  # indigo
+    PRIMARY_SHADE[300],  # light green
+    SECONDARY_SHADE[800],  # dark blue
+    GREY["dark"],  # grey
 )
 
 # Per-heater colour, shared between a heater's PID-temperature line (temp axis,
 # dashed) and its PWM line (pwm axis, solid) so the eye links the two. Echoes
 # the old UI's blue/red TEC1/TEC2 using brand hues.
 HEATER_PALETTE = (
-    SECONDARY_SHADE[700],   # deep blue
-    ERROR_COLOR,            # red
-    WARNING_COLOR,          # orange
-    SUCCESS_COLOR,          # green
+    SECONDARY_SHADE[700],  # deep blue
+    ERROR_COLOR,  # red
+    WARNING_COLOR,  # orange
+    SUCCESS_COLOR,  # green
 )
 
 # Theme backgrounds (dark bg matches the app's dark theme surface; light uses

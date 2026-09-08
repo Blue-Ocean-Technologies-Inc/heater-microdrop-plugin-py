@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater Plots dock pane.
 
 A lean pyface DockPane with two tabs: the live matplotlib canvas and the
@@ -7,32 +17,50 @@ pane. The Pause / Stop / Clear buttons only flip model traits (paused /
 enabled / clear_requested) — the canvas reads those on its timer, keeping
 the model/view separation intact.
 """
-from traits.api import Any, Instance
-from pyface.tasks.dock_pane import DockPane
+
+# Third-party imports.
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QToolButton,
+    QHBoxLayout,
+    QTabWidget,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
-from microdrop_style.fonts.fontnames import ICON_FONT_FAMILY
-from microdrop_style.icons.icons import ICON_PAUSE, ICON_RESUME, ICON_STOP, ICON_PLAY
-from logger.logger_service import get_logger
+# Enthought library imports.
+from pyface.tasks.dock_pane import DockPane
+from traits.api import Any, Instance
 
+# Microdrop package imports.
 from heater_controls_ui.consts import plot_listener_name
 
+# Microdrop style imports.
+from microdrop_style.fonts.fontnames import ICON_FONT_FAMILY
+from microdrop_style.icons.icons import ICON_PAUSE, ICON_PLAY, ICON_RESUME, ICON_STOP
+
+# Local imports.
+from .canvas import HeaterPlotCanvas
 from .consts import (
-    PLOT_DOCK_PANE_ID, PLOT_DOCK_PANE_NAME,
-    LIVE_PLOTS_TAB_LABEL, LOG_VIEWER_TAB_LABEL,
-    PAUSE_PLOT_TOOLTIP, RESUME_PLOT_TOOLTIP,
-    STOP_PLOT_TOOLTIP, START_PLOT_TOOLTIP,
-    CLEAR_PLOT_ICON, CLEAR_PLOT_TOOLTIP,
+    CLEAR_PLOT_ICON,
+    CLEAR_PLOT_TOOLTIP,
+    LIVE_PLOTS_TAB_LABEL,
+    LOG_VIEWER_TAB_LABEL,
+    PAUSE_PLOT_TOOLTIP,
+    PLOT_DOCK_PANE_ID,
+    PLOT_DOCK_PANE_NAME,
+    RESUME_PLOT_TOOLTIP,
+    START_PLOT_TOOLTIP,
+    STOP_PLOT_TOOLTIP,
 )
 from .log_model import HeaterLogViewerModel
-from .model import HeaterPlotModel
-from .message_handler import HeaterPlotMessageHandler
-from .canvas import HeaterPlotCanvas
 from .log_view import HeaterLogViewerController, LogView
+from .message_handler import HeaterPlotMessageHandler
+from .model import HeaterPlotModel
+
+# Logger import.
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -59,7 +87,8 @@ class HeaterPlotDockPane(DockPane):
         # Start the telemetry listener up front so samples accumulate even
         # before the pane is first shown.
         self.message_handler = HeaterPlotMessageHandler(
-            model=self.model, name=plot_listener_name)
+            model=self.model, name=plot_listener_name
+        )
 
     def create_contents(self, parent):
         tabs = QTabWidget(parent)
@@ -68,8 +97,7 @@ class HeaterPlotDockPane(DockPane):
         # view context gets object=model and handler=controller for free.
         model = HeaterLogViewerModel()
         self.log_viewer = HeaterLogViewerController(model)
-        self._log_viewer_ui = model.edit_traits(view=LogView,
-                                                handler=self.log_viewer)
+        self._log_viewer_ui = model.edit_traits(view=LogView, handler=self.log_viewer)
         # DATA_LOG_SAVED (via the plot listener) auto-shows freshly saved
         # logs in the tab.
         self.message_handler.log_viewer_model = model
@@ -89,14 +117,16 @@ class HeaterPlotDockPane(DockPane):
         toolbar_row.addWidget(NavigationToolbar2QT(self._canvas, container))
         toolbar_row.addStretch(1)
         self._pause_button = self._make_toggle_button(
-            container, ICON_PAUSE, PAUSE_PLOT_TOOLTIP, self._on_pause_toggled)
+            container, ICON_PAUSE, PAUSE_PLOT_TOOLTIP, self._on_pause_toggled
+        )
         toolbar_row.addWidget(self._pause_button)
         self._clear_button = self._make_action_button(
-            container, CLEAR_PLOT_ICON, CLEAR_PLOT_TOOLTIP,
-            self._on_clear_clicked)
+            container, CLEAR_PLOT_ICON, CLEAR_PLOT_TOOLTIP, self._on_clear_clicked
+        )
         toolbar_row.addWidget(self._clear_button)
         self._stop_button = self._make_toggle_button(
-            container, ICON_STOP, STOP_PLOT_TOOLTIP, self._on_stop_toggled)
+            container, ICON_STOP, STOP_PLOT_TOOLTIP, self._on_stop_toggled
+        )
         toolbar_row.addWidget(self._stop_button)
 
         layout.addLayout(toolbar_row)
@@ -152,11 +182,11 @@ class HeaterPlotDockPane(DockPane):
         # the protocol controls' play/pause/resume icon convention.
         self._pause_button.setText(ICON_RESUME if checked else ICON_PAUSE)
         self._pause_button.setToolTip(
-            RESUME_PLOT_TOOLTIP if checked else PAUSE_PLOT_TOOLTIP)
+            RESUME_PLOT_TOOLTIP if checked else PAUSE_PLOT_TOOLTIP
+        )
         # Clearing while paused would silently do nothing (the canvas never
         # ticks to drain the request while paused), so grey it out too.
-        self._clear_button.setEnabled(
-            not checked and not self._stop_button.isChecked())
+        self._clear_button.setEnabled(not checked and not self._stop_button.isChecked())
 
     def _on_stop_toggled(self, checked):
         self.model.enabled = not checked
@@ -165,7 +195,8 @@ class HeaterPlotDockPane(DockPane):
         # restart is one click away.
         self._stop_button.setText(ICON_PLAY if checked else ICON_STOP)
         self._stop_button.setToolTip(
-            START_PLOT_TOOLTIP if checked else STOP_PLOT_TOOLTIP)
+            START_PLOT_TOOLTIP if checked else STOP_PLOT_TOOLTIP
+        )
         # Pausing a stopped plot is meaningless — grey the button out. This
         # must only ever touch the pause button's enabled state, never its
         # checked state/glyph/tooltip — those are owned solely by
@@ -175,7 +206,8 @@ class HeaterPlotDockPane(DockPane):
         # Clearing a stopped plot is equally meaningless (Stop already
         # dropped the history), so grey it out here too, unless paused.
         self._clear_button.setEnabled(
-            not checked and not self._pause_button.isChecked())
+            not checked and not self._pause_button.isChecked()
+        )
 
     def _on_clear_clicked(self):
         # View-only purge: flip a model trait, the canvas drains it on its

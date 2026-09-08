@@ -1,18 +1,34 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
+# Standard library imports.
 import json
 import os
 import subprocess
 import sys
 import tempfile
 
-from traits.api import provides, HasTraits, Instance
+# Enthought library imports.
+from traits.api import HasTraits, Instance, provides
 
+# Microdrop utils imports.
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 
-from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
-from ..heater_serial_proxy import HeaterSerialProxy
+# Local imports.
 from ..consts import CONFIG_PUSHED
+from ..heater_serial_proxy import HeaterSerialProxy
+from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
 
+# Logger import.
 from logger.logger_service import get_logger
+
 logger = get_logger(__name__)
 
 # Timeout for an individual mpremote invocation (cp / reset).
@@ -36,6 +52,7 @@ class HeaterConfigService(HasTraits):
     All only run while connected (the base listener gates requests on the
     connection), so a missing proxy can't be hit for scan/dump.
     """
+
     proxy = Instance(HeaterSerialProxy)
 
     def on_dump_config_request(self, message):
@@ -97,7 +114,8 @@ class HeaterConfigService(HasTraits):
         logger.info(f"Running: {' '.join(cmd)}")
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=MPREMOTE_TIMEOUT_S)
+                cmd, capture_output=True, text=True, timeout=MPREMOTE_TIMEOUT_S
+            )
         except FileNotFoundError:
             raise RuntimeError("mpremote is not installed in the backend environment")
         if result.returncode != 0:

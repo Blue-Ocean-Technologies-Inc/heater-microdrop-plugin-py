@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater temperature compound column — drives a heater to a target temperature
 for a protocol step and blocks the step until the PID temperature is within a
 tolerance band of the target.
@@ -14,25 +24,36 @@ backend sets the target, watches the PID telemetry, and acks on
 TEMPERATURE_REACHED once within tolerance — which the step's ``ctx.wait_for``
 is blocking on.
 """
+
+# Standard library imports.
 import json
 
+# Enthought library imports.
 from pyface.qt.QtCore import Qt
 from traits.api import Bool, Float
 
-from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
+# Microdrop package imports.
 from heater_controller.compensation import compensate_setpoint_from_preferences
 from heater_controller.consts import (
-    PROTOCOL_SET_TEMPERATURE, STOP_STREAM, TEMPERATURE_REACHED,
     DEFAULT_HEATER,
+    PROTOCOL_SET_TEMPERATURE,
+    STOP_STREAM,
+    TEMPERATURE_REACHED,
 )
 from pluggable_protocol_tree.interfaces.i_compound_column import FieldSpec
 from pluggable_protocol_tree.models.compound_column import (
-    BaseCompoundColumnHandler, BaseCompoundColumnModel, CompoundColumn,
+    BaseCompoundColumnHandler,
+    BaseCompoundColumnModel,
+    CompoundColumn,
     DictCompoundColumnView,
 )
 from pluggable_protocol_tree.views.columns.checkbox import CheckboxColumnView
 from pluggable_protocol_tree.views.columns.spinbox import DoubleSpinBoxColumnView
 
+# Microdrop utils imports.
+from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
+
+# Local imports.
 from ..consts import SET_TEMPERATURE_FIELD_ID
 
 # Sensible defaults / spinbox ranges (mirror the heater UI's setpoint range).
@@ -45,6 +66,7 @@ TOLERANCE_MIN, TOLERANCE_MAX = 0.0, 20.0
 class TemperatureCompoundModel(BaseCompoundColumnModel):
     """Three coupled fields; base_id 'heater_temperature' appears as the
     compound id on each field's JSON column entry."""
+
     base_id = "heater_temperature"
 
     def field_specs(self):
@@ -83,6 +105,7 @@ class TemperatureHandler(BaseCompoundColumnHandler):
     The ack wait comes from the Protocol Settings grid; set it to 0 there to run
     fire-and-forget (set the target without blocking).
     """
+
     priority = 20
     wait_for_topics = [TEMPERATURE_REACHED]
     # Heating/cooling to a setpoint is slow, so default the ack-wait higher than
@@ -98,15 +121,18 @@ class TemperatureHandler(BaseCompoundColumnHandler):
             return
         publish_message(
             topic=PROTOCOL_SET_TEMPERATURE,
-            message=json.dumps({
-                "heater": DEFAULT_HEATER,
-                # Compensation (advanced-mode preference) maps the step's base
-                # target the same way the controls pane maps its setpoint; the
-                # tolerance band stays in raw degrees.
-                "temperature": compensate_setpoint_from_preferences(
-                    float(row.target_temperature_c)),
-                "tolerance": float(row.tolerance_c),
-            }),
+            message=json.dumps(
+                {
+                    "heater": DEFAULT_HEATER,
+                    # Compensation (advanced-mode preference) maps the step's base
+                    # target the same way the controls pane maps its setpoint; the
+                    # tolerance band stays in raw degrees.
+                    "temperature": compensate_setpoint_from_preferences(
+                        float(row.target_temperature_c)
+                    ),
+                    "tolerance": float(row.tolerance_c),
+                }
+            ),
         )
         if self.ack_time_s > 0:
             ctx.wait_for(TEMPERATURE_REACHED, timeout=self.ack_time_s)
@@ -119,20 +145,23 @@ class TemperatureHandler(BaseCompoundColumnHandler):
         telemetry log on this."""
         if getattr(ctx, "preview_mode", False):
             return
-        publish_message(topic=STOP_STREAM,
-                        message=json.dumps({"all_off": True}))
+        publish_message(topic=STOP_STREAM, message=json.dumps({"all_off": True}))
 
 
 def make_temperature_column():
     """Factory — a fresh heater-temperature CompoundColumn."""
     return CompoundColumn(
         model=TemperatureCompoundModel(),
-        view=DictCompoundColumnView(cell_views={
-            SET_TEMPERATURE_FIELD_ID: CheckboxColumnView(),
-            "target_temperature_c": TemperatureSetpointSpinBoxView(
-                low=TARGET_MIN, high=TARGET_MAX, decimals=1, single_step=1.0),
-            "tolerance_c": TemperatureSetpointSpinBoxView(
-                low=TOLERANCE_MIN, high=TOLERANCE_MAX, decimals=1, single_step=0.5),
-        }),
+        view=DictCompoundColumnView(
+            cell_views={
+                SET_TEMPERATURE_FIELD_ID: CheckboxColumnView(),
+                "target_temperature_c": TemperatureSetpointSpinBoxView(
+                    low=TARGET_MIN, high=TARGET_MAX, decimals=1, single_step=1.0
+                ),
+                "tolerance_c": TemperatureSetpointSpinBoxView(
+                    low=TOLERANCE_MIN, high=TOLERANCE_MAX, decimals=1, single_step=0.5
+                ),
+            }
+        ),
         handler=TemperatureHandler(),
     )

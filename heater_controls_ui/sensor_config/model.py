@@ -1,12 +1,29 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Qt-free model for the Configure Sensors & Heaters editor.
 
 The message handler feeds it the board's ``dump_config`` document and scan
 results (via :mod:`.parsing`); the view renders the two row lists as tables.
 """
-from traits.api import Str, Bool, List, HasTraits, Instance, Dict, observe
 
+# Enthought library imports.
+from traits.api import Bool, Dict, HasTraits, Instance, List, Str, observe
+
+# Local imports.
 from .parsing import (
-    parse_board_config, sensor_rows, heater_rows, thermistor_names, scan_summary,
+    heater_rows,
+    parse_board_config,
+    scan_summary,
+    sensor_rows,
+    thermistor_names,
 )
 
 # Instructional copy shown at the top of the dialog (rendered word-wrapped so a
@@ -40,6 +57,7 @@ def _reconcile(existing, desired, key, factory, update):
 class SensorRow(HasTraits):
     """One 1-Wire sensor: its ROM id, the name it's given, and a status derived
     from whether it's in the config and/or seen on the last bus scan."""
+
     rom = Str()
     name = Str()
     status = Str()
@@ -47,6 +65,7 @@ class SensorRow(HasTraits):
 
 class HeaterAssignmentRow(HasTraits):
     """One heater channel and the sensors assigned to it (comma-separated)."""
+
     heater = Str()
     type = Str()
     sensors = Str()
@@ -58,6 +77,7 @@ class SensorConfigModel(HasTraits):
     Phase 1 is read-only (display + scan/refresh). Editing, validation, and
     saving come in later phases.
     """
+
     # Raw board config (last dump_config), kept for re-deriving rows on scan.
     config = Dict()
     scanned_roms = List(Str)
@@ -123,10 +143,16 @@ class SensorConfigModel(HasTraits):
         table (replacing the whole list from a background thread did not), and
         they let a scan keep in-progress name edits (``update_names=False``)."""
         self.sensors = _reconcile(
-            self.sensors, sensor_rows(self.config, self.scanned_roms, self.scan_done),
-            key="rom", factory=SensorRow,
-            update=("name", "status") if update_names else ("status",))
+            self.sensors,
+            sensor_rows(self.config, self.scanned_roms, self.scan_done),
+            key="rom",
+            factory=SensorRow,
+            update=("name", "status") if update_names else ("status",),
+        )
         self.heater_assignments = _reconcile(
-            self.heater_assignments, heater_rows(self.config),
-            key="heater", factory=HeaterAssignmentRow,
-            update=("type", "sensors") if update_names else ("type",))
+            self.heater_assignments,
+            heater_rows(self.config),
+            key="heater",
+            factory=HeaterAssignmentRow,
+            update=("type", "sensors") if update_names else ("type",),
+        )

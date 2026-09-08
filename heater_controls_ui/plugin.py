@@ -1,14 +1,34 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
+# Enthought library imports.
 from envisage.api import PREFERENCES_CATEGORIES, PREFERENCES_PANES
-from heater_controller.consts import HEATER_HWID, START_DEVICE_MONITORING
-from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
-from microdrop_utils.hardware_device_monitoring_helpers import check_connected_ports_hwid
-from template_status_and_controls.base_plugin import BaseStatusPlugin
 from traits.api import List, observe
 
-from logger.logger_service import get_logger
-logger = get_logger(__name__)
+# Microdrop package imports.
+from heater_controller.consts import HEATER_HWID, START_DEVICE_MONITORING
+from template_status_and_controls.base_plugin import BaseStatusPlugin
 
-from .consts import PKG, PKG_name, ACTOR_TOPIC_DICT
+# Microdrop utils imports.
+from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
+from microdrop_utils.hardware_device_monitoring_helpers import (
+    check_connected_ports_hwid,
+)
+
+# Local imports.
+from .consts import ACTOR_TOPIC_DICT, PKG, PKG_name
+
+# Logger import.
+from logger.logger_service import get_logger
+
+logger = get_logger(__name__)
 
 
 class HeaterControlsUiPlugin(BaseStatusPlugin):
@@ -28,19 +48,23 @@ class HeaterControlsUiPlugin(BaseStatusPlugin):
 
     def _preferences_panes_default(self):
         from .preferences import HeaterPreferencesPane
+
         return [HeaterPreferencesPane]
 
     def _preferences_categories_default(self):
         from .preferences import heater_tab
+
         return [heater_tab]
 
     def _get_dock_pane_class(self):
         from .dock_pane import HeaterStatusDockPane
+
         return HeaterStatusDockPane
 
     def _get_extra_dock_pane_classes(self) -> list:
         # Second dock pane: live Temperature / PWM plots.
         from .plots.dock_pane import HeaterPlotDockPane
+
         return [HeaterPlotDockPane]
 
     def _get_actor_topic_dict(self) -> dict:
@@ -48,7 +72,9 @@ class HeaterControlsUiPlugin(BaseStatusPlugin):
 
     def _get_menu_additions(self) -> list:
         from pyface.action.schema.schema_addition import SchemaAddition
+
         from .menus import tools_menu_factory
+
         return [
             SchemaAddition(
                 factory=tools_menu_factory,
@@ -68,5 +94,6 @@ class HeaterControlsUiPlugin(BaseStatusPlugin):
         else:
             logger.info(
                 "Heater Board not connected. To start search, goto tools menu:"
-                "Tools -> Peripherals -> Heater -> Search Connection or use Heater UI status bar Button."
+                "Tools -> Peripherals -> Heater -> Search Connection or use "
+                "Heater UI status bar Button."
             )

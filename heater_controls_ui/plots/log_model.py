@@ -1,21 +1,45 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Qt-free HasTraits model for the heater log viewer tab: the browsed
 heater_logs folder, its discovered ``.jsonl`` telemetry logs (written by
 heater_controller.data_logger), and the loaded log's plottable series.
 Static — a log is parsed once when selected. Mutated only on the GUI
 thread (toolbar buttons, combo selection), so no Qt bridging is needed.
 """
+
+# Standard library imports.
 import json
 from datetime import datetime
 from pathlib import Path
 
+# Enthought library imports.
 from traits.api import (
-    Dict, Directory, Event, HasTraits, List, Property, Set, Str,
+    Dict,
+    Directory,
+    Event,
+    HasTraits,
+    List,
+    Property,
+    Set,
+    Str,
 )
 
+# Microdrop package imports.
 from heater_controls_ui.telemetry import telemetry_samples
-from logger.logger_service import get_logger
 
+# Local imports.
 from .consts import LOG_TIME_DISPLAY_FORMAT
+
+# Logger import.
+from logger.logger_service import get_logger
 
 logger = get_logger(__name__)
 
@@ -95,8 +119,7 @@ def parse_heater_log(text):
             values.append(sample["pid_temperature"])
         pid_target = record.get("pid_target")
         if "heater" in sample and isinstance(pid_target, (int, float)):
-            times, values = setpoint_series.setdefault(
-                sample["heater"], ([], []))
+            times, values = setpoint_series.setdefault(sample["heater"], ([], []))
             times.append(elapsed_s)
             values.append(float(pid_target))
     return start_dt, end_dt, sensor_series, pid_series, setpoint_series
@@ -110,8 +133,7 @@ def fallback_time_span(log_path):
     log_path = Path(log_path)
     name_parts = log_path.stem.split("_")
     try:
-        start_dt = datetime.strptime("_".join(name_parts[:2]),
-                                     "%Y%m%d_%H%M%S")
+        start_dt = datetime.strptime("_".join(name_parts[:2]), "%Y%m%d_%H%M%S")
     except ValueError:
         return None, None
     try:
@@ -172,20 +194,23 @@ class HeaterLogViewerModel(HasTraits):
         except OSError as e:
             logger.warning(f"Could not read heater log {log_path}: {e}")
             return
-        (start_dt, end_dt, sensor_series, pid_series,
-         setpoint_series) = parse_heater_log(text)
+        (start_dt, end_dt, sensor_series, pid_series, setpoint_series) = (
+            parse_heater_log(text)
+        )
         if start_dt is None:
             start_dt, end_dt = fallback_time_span(log_path)
-        self.start_time_text = (start_dt.strftime(LOG_TIME_DISPLAY_FORMAT)
-                                if start_dt else "-")
-        self.end_time_text = (end_dt.strftime(LOG_TIME_DISPLAY_FORMAT)
-                              if end_dt else "-")
+        self.start_time_text = (
+            start_dt.strftime(LOG_TIME_DISPLAY_FORMAT) if start_dt else "-"
+        )
+        self.end_time_text = end_dt.strftime(LOG_TIME_DISPLAY_FORMAT) if end_dt else "-"
         self.sensor_series = sensor_series
         self.pid_series = pid_series
         self.setpoint_series = setpoint_series
         self.data_changed = True
-        logger.info(f"Heater log loaded: {log_path} "
-                    f"({self.start_time_text} -> {self.end_time_text})")
+        logger.info(
+            f"Heater log loaded: {log_path} "
+            f"({self.start_time_text} -> {self.end_time_text})"
+        )
 
     def clear(self):
         """Empty the plot (no log selected / folder empty)."""

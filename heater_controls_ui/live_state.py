@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Live (non-persisted) heater UI state shared inside the plugin.
 
 Carries the worker-thread -> GUI-thread hand-offs the firmware-upload dialog
@@ -5,6 +15,8 @@ needs: the backend's upload signals, the connected board's whoami id, and its
 serial port. The message handler writes these on the dramatiq worker thread;
 the dialog controller observes them with dispatch="ui".
 """
+
+# Enthought library imports.
 from traits.api import Event, HasTraits, Str
 
 

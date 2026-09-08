@@ -1,53 +1,82 @@
 #!/usr/bin/env python3
-import os
-import re
-import sys
-import time
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
+# Standard library imports.
 import json
-import yaml
-import shutil
 import logging
+import os
 import platform
-import threading
-import traceback
+import re
+import shutil
 import subprocess
-
-import serial as pyserial
-
-from time import sleep
-from pathlib import Path
+import sys
+import threading
+import time
+import traceback
 from datetime import datetime
-from scipy.signal import find_peaks, butter, filtfilt
+from pathlib import Path
+from time import sleep
 
+# Third-party imports.
 import numpy as np
 import pandas as pd
+import serial as pyserial
+import yaml
+from scipy.signal import butter, filtfilt, find_peaks
 
 # Set matplotlib backend before importing PySide6
-os.environ['QT_API'] = 'pyside6'  # Tell matplotlib to use PySide6
+os.environ["QT_API"] = "pyside6"  # Tell matplotlib to use PySide6
 os.environ["QT_SCALE_FACTOR"] = "0.8"
 import matplotlib
-matplotlib.use('QtAgg')  # Use QtAgg backend for Qt6 compatibility
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QLabel, QPushButton, QSpinBox, QDoubleSpinBox, QFileDialog,
-    QCheckBox, QTextEdit, QGroupBox, QStatusBar, QComboBox, QScrollArea, QRadioButton,
-    QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
-    QTabWidget
-)
-from PySide6.QtCore import Slot, Signal, QTimer, Qt
-from PySide6.QtGui import QPalette, QAction
-
+matplotlib.use("QtAgg")  # Use QtAgg backend for Qt6 compatibility
 # Import the existing controller module
 from controller import Board
-
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QAction, QPalette
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QScrollArea,
+    QSpinBox,
+    QStatusBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 # Constants
 MAX_WINDOW_HEIGHT = 1200
 PLOT_UPDATE_INTERVAL_MS = 500  # Plot update interval in milliseconds (faster updates)
-MAX_PLOT_POINTS = 500  # Maximum number of points to display on plot (optimized for performance)
+MAX_PLOT_POINTS = (
+    500  # Maximum number of points to display on plot (optimized for performance)
+)
 DEFAULT_SETPOINT = 40.0  # Default temperature setpoint in °C
 INVALID_TEMP_THRESHOLD = -40  # Temperature values below this are considered invalid
 COMMAND_DELAY_SHORT = 1  # Short delay between commands in seconds
@@ -77,19 +106,16 @@ class DataLogger:
         self.current_file = self.log_dir / f"{timestamp}.json"
 
         # Create file and open for appending (JSON format - one JSON object per line)
-        self.file_handle = open(self.current_file, 'w')
+        self.file_handle = open(self.current_file, "w")
         print(f"Started logging to: {self.current_file}")
 
     def log_data(self, data):
         """Log data point to JSON Lines format"""
         if self.file_handle:
             # Add timestamp to data
-            data_with_timestamp = {
-                'timestamp': datetime.now().isoformat(),
-                **data
-            }
+            data_with_timestamp = {"timestamp": datetime.now().isoformat(), **data}
             # Write as single line JSON
-            self.file_handle.write(json.dumps(data_with_timestamp) + '\n')
+            self.file_handle.write(json.dumps(data_with_timestamp) + "\n")
             self.file_handle.flush()
 
     def stop_logging(self):
@@ -114,7 +140,8 @@ class RealTimePlot(FigureCanvas):
 
         # Data storage
         self.timestamps = []
-        self.sensor_data = {}  # Dynamic dictionary for all sensors: {'thermistor1': [], 'top-left': [], ...}
+        # Dynamic dictionary for all sensors: {'thermistor1': [], 'top-left': [], ...}
+        self.sensor_data = {}
         self.pid_temp_data = []
         self.heater1_pwm_data = []
         self.heater2_pwm_data = []
@@ -122,9 +149,16 @@ class RealTimePlot(FigureCanvas):
 
         # Color palette for dynamic sensors (using matplotlib color names)
         self.color_palette = [
-            'tab:blue', 'tab:red', 'tab:green', 'tab:orange',
-            'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray',
-            'tab:olive', 'tab:cyan'
+            "tab:blue",
+            "tab:red",
+            "tab:green",
+            "tab:orange",
+            "tab:purple",
+            "tab:brown",
+            "tab:pink",
+            "tab:gray",
+            "tab:olive",
+            "tab:cyan",
         ]
 
         # Widget state
@@ -181,13 +215,13 @@ class RealTimePlot(FigureCanvas):
         is_dark = palette.color(QPalette.Window).lightness() < 128
 
         if is_dark:
-            self._bg_color = '#2b2b2b'
-            self._text_color = '#ffffff'
-            self._grid_color = '#555555'
+            self._bg_color = "#2b2b2b"
+            self._text_color = "#ffffff"
+            self._grid_color = "#555555"
         else:
-            self._bg_color = '#ffffff'
-            self._text_color = '#000000'
-            self._grid_color = '#cccccc'
+            self._bg_color = "#ffffff"
+            self._text_color = "#000000"
+            self._grid_color = "#cccccc"
 
         self._cached_theme = is_dark
 
@@ -200,7 +234,12 @@ class RealTimePlot(FigureCanvas):
         self.fig.patch.set_facecolor(self._bg_color)
 
         # Temperature plot
-        self.ax1.set_title("Temperature Control", fontsize=12, fontweight='bold', color=self._text_color)
+        self.ax1.set_title(
+            "Temperature Control",
+            fontsize=12,
+            fontweight="bold",
+            color=self._text_color,
+        )
         self.ax1.set_ylabel("Temperature (°C)", fontsize=10, color=self._text_color)
         self.ax1.set_xlim(0, 1)  # Initial x-axis range
         self.ax1.set_ylim(0, 100)  # Initial y-axis range
@@ -209,7 +248,9 @@ class RealTimePlot(FigureCanvas):
         self.ax1.tick_params(colors=self._text_color)
 
         # PWM plot
-        self.ax2.set_title("Heater PWM Control", fontsize=12, fontweight='bold', color=self._text_color)
+        self.ax2.set_title(
+            "Heater PWM Control", fontsize=12, fontweight="bold", color=self._text_color
+        )
         self.ax2.set_xlabel("Time (s)", fontsize=10, color=self._text_color)
         self.ax2.set_ylabel("PWM (%)", fontsize=10, color=self._text_color)
         self.ax2.set_xlim(0, 1)  # Initial x-axis range
@@ -221,8 +262,9 @@ class RealTimePlot(FigureCanvas):
         # Apply tight layout with padding to prevent label cutoff
         self.fig.tight_layout(pad=3)
 
-    def add_data_point(self, timestamp, temperatures, pid_temp,
-                       heater1_pwm, heater2_pwm, setpoint):
+    def add_data_point(
+        self, timestamp, temperatures, pid_temp, heater1_pwm, heater2_pwm, setpoint
+    ):
         """Add a new data point with dynamic sensors
 
         Args:
@@ -244,8 +286,7 @@ class RealTimePlot(FigureCanvas):
         for sensor_name, temp_value in temperatures.items():
             if sensor_name not in self.sensor_data:
                 # New sensor - pad with None to match current timestamp length
-                self.sensor_data[sensor_name] = [None] * (
-                    len(self.timestamps) - 1)
+                self.sensor_data[sensor_name] = [None] * (len(self.timestamps) - 1)
             self.sensor_data[sensor_name].append(temp_value)
 
         self.pid_temp_data.append(pid_temp)
@@ -257,7 +298,9 @@ class RealTimePlot(FigureCanvas):
         if len(self.timestamps) > MAX_PLOT_POINTS:
             self.timestamps = self.timestamps[-MAX_PLOT_POINTS:]
             for sensor_name in self.sensor_data:
-                self.sensor_data[sensor_name] = self.sensor_data[sensor_name][-MAX_PLOT_POINTS:]
+                self.sensor_data[sensor_name] = self.sensor_data[sensor_name][
+                    -MAX_PLOT_POINTS:
+                ]
             self.pid_temp_data = self.pid_temp_data[-MAX_PLOT_POINTS:]
             self.heater1_pwm_data = self.heater1_pwm_data[-MAX_PLOT_POINTS:]
             self.heater2_pwm_data = self.heater2_pwm_data[-MAX_PLOT_POINTS:]
@@ -299,68 +342,111 @@ class RealTimePlot(FigureCanvas):
                 if has_data:
                     color = self.color_palette[color_idx % len(self.color_palette)]
                     self.ax1.plot(
-                        self.timestamps, sensor_values, '-',
-                        color=color, label=sensor_name,
-                        linewidth=2, alpha=0.8)
+                        self.timestamps,
+                        sensor_values,
+                        "-",
+                        color=color,
+                        label=sensor_name,
+                        linewidth=2,
+                        alpha=0.8,
+                    )
                     color_idx += 1
 
             # Plot PID temperature with distinct style
-            if self.pid_temp_data and any(
-                    t is not None for t in self.pid_temp_data):
+            if self.pid_temp_data and any(t is not None for t in self.pid_temp_data):
                 self.ax1.plot(
-                    self.timestamps, self.pid_temp_data, '-',
-                    color='black', label='PID Temp',
-                    linewidth=2.5, alpha=0.7)
+                    self.timestamps,
+                    self.pid_temp_data,
+                    "-",
+                    color="black",
+                    label="PID Temp",
+                    linewidth=2.5,
+                    alpha=0.7,
+                )
 
             # Plot setpoint
-            if self.setpoint_data and any(
-                    t is not None for t in self.setpoint_data):
+            if self.setpoint_data and any(t is not None for t in self.setpoint_data):
                 self.ax1.plot(
-                    self.timestamps, self.setpoint_data, '--',
-                    color='green', label='Setpoint', linewidth=2)
+                    self.timestamps,
+                    self.setpoint_data,
+                    "--",
+                    color="green",
+                    label="Setpoint",
+                    linewidth=2,
+                )
 
             # Set axis properties
-            self.ax1.set_title("Temperature Control", fontsize=12,
-                              fontweight='bold', color=self._text_color)
-            self.ax1.set_ylabel("Temperature (°C)", fontsize=10, 
-                               color=self._text_color)
+            self.ax1.set_title(
+                "Temperature Control",
+                fontsize=12,
+                fontweight="bold",
+                color=self._text_color,
+            )
+            self.ax1.set_ylabel("Temperature (°C)", fontsize=10, color=self._text_color)
             self.ax1.grid(True, alpha=0.3, color=self._grid_color)
             self.ax1.set_facecolor(self._bg_color)
             self.ax1.tick_params(colors=self._text_color)
-            
+
             # Calculate number of legend items (sensors + PID temp + setpoint)
             num_legend_items = color_idx
             if self.pid_temp_data and any(t is not None for t in self.pid_temp_data):
                 num_legend_items += 1
             if self.setpoint_data and any(t is not None for t in self.setpoint_data):
                 num_legend_items += 1
-            
+
             # Use multiple columns if more than 12 items
             legend_ncol = 1 if num_legend_items <= 12 else num_legend_items // 12 + 1
             fontsize = 8 if num_legend_items <= 12 else 5.5
-            
-            self.ax1.legend(loc='center left', bbox_to_anchor=(1.005, 0.5),
-                           facecolor=self._bg_color, edgecolor=self._text_color,
-                           labelcolor=self._text_color, fontsize=fontsize, ncol=legend_ncol)
+
+            self.ax1.legend(
+                loc="center left",
+                bbox_to_anchor=(1.005, 0.5),
+                facecolor=self._bg_color,
+                edgecolor=self._text_color,
+                labelcolor=self._text_color,
+                fontsize=fontsize,
+                ncol=legend_ncol,
+            )
 
             # PWM plot
             if self.heater1_pwm_data:
-                self.ax2.plot(self.timestamps, self.heater1_pwm_data, '-',
-                             color='blue', label='TEC1 PWM', linewidth=2)
+                self.ax2.plot(
+                    self.timestamps,
+                    self.heater1_pwm_data,
+                    "-",
+                    color="blue",
+                    label="TEC1 PWM",
+                    linewidth=2,
+                )
             if self.heater2_pwm_data:
-                self.ax2.plot(self.timestamps, self.heater2_pwm_data, '-',
-                             color='red', label='TEC2 PWM', linewidth=2)
+                self.ax2.plot(
+                    self.timestamps,
+                    self.heater2_pwm_data,
+                    "-",
+                    color="red",
+                    label="TEC2 PWM",
+                    linewidth=2,
+                )
 
-            self.ax2.set_title("Heater PWM Control", fontsize=12,
-                              fontweight='bold', color=self._text_color)
+            self.ax2.set_title(
+                "Heater PWM Control",
+                fontsize=12,
+                fontweight="bold",
+                color=self._text_color,
+            )
             self.ax2.set_xlabel("Time (s)", fontsize=10, color=self._text_color)
             self.ax2.set_ylabel("PWM (%)", fontsize=10, color=self._text_color)
             self.ax2.grid(True, alpha=0.3, color=self._grid_color)
             self.ax2.set_facecolor(self._bg_color)
             self.ax2.tick_params(colors=self._text_color)
-            self.ax2.legend(loc='center left', bbox_to_anchor=(1.005, 0.8),
-                           facecolor=self._bg_color, edgecolor=self._text_color,
-                           labelcolor=self._text_color, fontsize=8)
+            self.ax2.legend(
+                loc="center left",
+                bbox_to_anchor=(1.005, 0.8),
+                facecolor=self._bg_color,
+                edgecolor=self._text_color,
+                labelcolor=self._text_color,
+                fontsize=8,
+            )
 
             self.fig.tight_layout()
             self.draw()
@@ -451,7 +537,8 @@ class SensorConfigDialog(QDialog):
         btn_row = QHBoxLayout()
         self.refresh_btn = QPushButton("Refresh from Board")
         self.refresh_btn.setToolTip(
-            "Re-pull the live config from the board (requires connection).")
+            "Re-pull the live config from the board (requires connection)."
+        )
         self.refresh_btn.clicked.connect(self._on_refresh_clicked)
         btn_row.addWidget(self.refresh_btn)
         btn_row.addStretch()
@@ -459,14 +546,16 @@ class SensorConfigDialog(QDialog):
         self.save_btn.setToolTip(
             "Write changes to local firmware/config.json only. "
             "You'll still need to re-upload firmware for the board to "
-            "see them.")
+            "see them."
+        )
         self.save_btn.clicked.connect(self._on_save_local)
         btn_row.addWidget(self.save_btn)
         self.push_btn = QPushButton("Save && Push to Board")
         self.push_btn.setToolTip(
             "Save to local config.json AND copy it to the board via "
             "mpremote. Briefly disconnects, copies the file, reboots the "
-            "board, then reconnects.")
+            "board, then reconnects."
+        )
         self.push_btn.clicked.connect(self._on_save_and_push)
         btn_row.addWidget(self.push_btn)
         self.close_btn = QPushButton("Close")
@@ -500,8 +589,7 @@ class SensorConfigDialog(QDialog):
         v.addLayout(top_bar)
 
         self.table = QTableWidget(0, 4, w)
-        self.table.setHorizontalHeaderLabels(
-            ["Save", "ROM (hex)", "Name", "Status"])
+        self.table.setHorizontalHeaderLabels(["Save", "ROM (hex)", "Name", "Status"])
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(self.COL_CHECK, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(self.COL_ROM, QHeaderView.ResizeToContents)
@@ -514,13 +602,17 @@ class SensorConfigDialog(QDialog):
     def _build_heaters_tab(self):
         w = QWidget()
         v = QVBoxLayout(w)
-        v.addWidget(QLabel(
-            "Edit the comma-separated sensor list for each heater. Use "
-            "1-Wire sensor names from the Sensors tab and thermistor names "
-            "from the config (e.g. thermistor1, thermistor2)."))
+        v.addWidget(
+            QLabel(
+                "Edit the comma-separated sensor list for each heater. Use "
+                "1-Wire sensor names from the Sensors tab and thermistor names "
+                "from the config (e.g. thermistor1, thermistor2)."
+            )
+        )
         self.heaters_table = QTableWidget(0, 3, w)
         self.heaters_table.setHorizontalHeaderLabels(
-            ["Heater", "Type", "Sensors (comma-separated)"])
+            ["Heater", "Type", "Sensors (comma-separated)"]
+        )
         h = self.heaters_table.horizontalHeader()
         h.setSectionResizeMode(self.HCOL_NAME, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(self.HCOL_TYPE, QHeaderView.ResizeToContents)
@@ -546,22 +638,22 @@ class SensorConfigDialog(QDialog):
         except Exception as e:
             self.config_data = {}
             QMessageBox.warning(
-                self, "Config load error",
+                self,
+                "Config load error",
                 f"Could not read {FIRMWARE_CONFIG_PATH}:\n{e}\n\n"
                 "Scan will still work but existing names won't be "
-                "pre-populated.")
+                "pre-populated.",
+            )
         self._derive_sections()
 
     def _derive_sections(self):
         cfg = self.config_data if isinstance(self.config_data, dict) else {}
-        ts = cfg.get("temperature_sensors", {}) if isinstance(
-            cfg, dict) else {}
-        self.ow_section = ts.get("1-wire-sensors", {}) if isinstance(
-            ts, dict) else {}
-        self.thermistors_section = ts.get("thermistors", {}) if isinstance(
-            ts, dict) else {}
-        self.heaters_section = cfg.get("heaters", {}) if isinstance(
-            cfg, dict) else {}
+        ts = cfg.get("temperature_sensors", {}) if isinstance(cfg, dict) else {}
+        self.ow_section = ts.get("1-wire-sensors", {}) if isinstance(ts, dict) else {}
+        self.thermistors_section = (
+            ts.get("thermistors", {}) if isinstance(ts, dict) else {}
+        )
+        self.heaters_section = cfg.get("heaters", {}) if isinstance(cfg, dict) else {}
         self.existing_map = {
             str(rom).lower(): name
             for name, rom in self.ow_section.items()
@@ -578,8 +670,8 @@ class SensorConfigDialog(QDialog):
     def _on_refresh_clicked(self):
         if self.board is None or not self.board.connected:
             QMessageBox.warning(
-                self, "Not connected",
-                "Connect to the board first, then try again.")
+                self, "Not connected", "Connect to the board first, then try again."
+            )
             return
         self._start_pull_from_board()
 
@@ -609,7 +701,8 @@ class SensorConfigDialog(QDialog):
         self.status_label.setText("Config pull timed out — using local file.")
         self._load_local_config()
         self._config_source = (
-            f"local file (pull from board timed out: {FIRMWARE_CONFIG_PATH})")
+            f"local file (pull from board timed out: {FIRMWARE_CONFIG_PATH})"
+        )
         self._update_source_label()
         self._populate_from_config()
         self._on_pull_finished(success=False)
@@ -646,10 +739,10 @@ class SensorConfigDialog(QDialog):
                 self._pull_timer.stop()
                 self._capturing_config = False
                 self.status_label.setText(
-                    f"Board reported error pulling config: {stripped}")
+                    f"Board reported error pulling config: {stripped}"
+                )
                 self._load_local_config()
-                self._config_source = (
-                    f"local file (board errored: {stripped})")
+                self._config_source = f"local file (board errored: {stripped})"
                 self._update_source_label()
                 self._populate_from_config()
                 self._on_pull_finished(success=False)
@@ -664,8 +757,9 @@ class SensorConfigDialog(QDialog):
             return
         rom = m.group(1).lower()
         st = self._rom_state.setdefault(
-            rom, {'from_config': False, 'seen_on_bus': False})
-        st['seen_on_bus'] = True
+            rom, {"from_config": False, "seen_on_bus": False}
+        )
+        st["seen_on_bus"] = True
         name = self.existing_map.get(rom, "")
         self._add_or_update_row(rom, name)
         self._refresh_statuses()
@@ -678,16 +772,15 @@ class SensorConfigDialog(QDialog):
             self._derive_sections()
             self._config_source = "live from board (dump_config)"
             self._update_source_label()
-            self.status_label.setText(
-                "Config pulled from board successfully.")
+            self.status_label.setText("Config pulled from board successfully.")
             self._populate_from_config()
             self._on_pull_finished(success=True)
         except Exception as e:
             self.status_label.setText(
-                f"Failed to parse config from board ({e}); using local file.")
+                f"Failed to parse config from board ({e}); using local file."
+            )
             self._load_local_config()
-            self._config_source = (
-                f"local file (board response unparseable: {e})")
+            self._config_source = f"local file (board response unparseable: {e})"
             self._update_source_label()
             self._populate_from_config()
             self._on_pull_finished(success=False)
@@ -702,18 +795,22 @@ class SensorConfigDialog(QDialog):
         self._rom_state = {}
         self._scan_done = False
         for rom, name in self.existing_map.items():
-            self._rom_state[rom] = {'from_config': True, 'seen_on_bus': False}
+            self._rom_state[rom] = {"from_config": True, "seen_on_bus": False}
             self._add_or_update_row(rom, name)
         self._refresh_statuses()
 
         # Wipe + rebuild heater assignments table
         self._populate_heaters()
         # Update the "available sensor names" hint
-        names = sorted(set(list(self.existing_map.values()) +
-                           list(self.thermistors_section.keys())))
+        names = sorted(
+            set(
+                list(self.existing_map.values()) + list(self.thermistors_section.keys())
+            )
+        )
         names = [n for n in names if n]  # drop empties
         self.available_sensors_label.setText(
-            ", ".join(names) if names else "(none defined yet)")
+            ", ".join(names) if names else "(none defined yet)"
+        )
 
     def _populate_heaters(self):
         self.heaters_table.setRowCount(0)
@@ -725,13 +822,13 @@ class SensorConfigDialog(QDialog):
             name_item = QTableWidgetItem(heater_name)
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.heaters_table.setItem(row, self.HCOL_NAME, name_item)
-            htype = heater_cfg.get("type", "?") if isinstance(
-                heater_cfg, dict) else "?"
+            htype = heater_cfg.get("type", "?") if isinstance(heater_cfg, dict) else "?"
             type_item = QTableWidgetItem(str(htype))
             type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
             self.heaters_table.setItem(row, self.HCOL_TYPE, type_item)
-            sensors = heater_cfg.get("sensors", []) if isinstance(
-                heater_cfg, dict) else []
+            sensors = (
+                heater_cfg.get("sensors", []) if isinstance(heater_cfg, dict) else []
+            )
             if not isinstance(sensors, list):
                 sensors = []
             sensors_item = QTableWidgetItem(", ".join(str(s) for s in sensors))
@@ -754,7 +851,8 @@ class SensorConfigDialog(QDialog):
         self.table.insertRow(row)
         check_item = QTableWidgetItem()
         check_item.setFlags(
-            (check_item.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsEditable)
+            (check_item.flags() | Qt.ItemIsUserCheckable) & ~Qt.ItemIsEditable
+        )
         check_item.setCheckState(Qt.Checked)
         check_item.setTextAlignment(Qt.AlignCenter)
         self.table.setItem(row, self.COL_CHECK, check_item)
@@ -768,7 +866,7 @@ class SensorConfigDialog(QDialog):
         return row
 
     def _status_text(self, st):
-        fc, sb = st['from_config'], st['seen_on_bus']
+        fc, sb = st["from_config"], st["seen_on_bus"]
         if fc and sb:
             return "On bus + in config"
         if fc and not sb:
@@ -780,8 +878,7 @@ class SensorConfigDialog(QDialog):
     def _refresh_statuses(self):
         for r in range(self.table.rowCount()):
             rom = self.table.item(r, self.COL_ROM).text().lower()
-            st = self._rom_state.get(
-                rom, {'from_config': False, 'seen_on_bus': False})
+            st = self._rom_state.get(rom, {"from_config": False, "seen_on_bus": False})
             self.table.item(r, self.COL_STATUS).setText(self._status_text(st))
 
     # ------------------------------------------------------------------
@@ -791,13 +888,13 @@ class SensorConfigDialog(QDialog):
     def _on_scan_clicked(self):
         if self.board is None or not self.board.connected:
             QMessageBox.warning(
-                self, "Not connected",
-                "Connect to the board before scanning.")
+                self, "Not connected", "Connect to the board before scanning."
+            )
             return
         self.status_label.setText("Scanning...")
         self.scan_btn.setEnabled(False)
         for st in self._rom_state.values():
-            st['seen_on_bus'] = False
+            st["seen_on_bus"] = False
         if not self._signal_connected:
             self.board.message_received.connect(self._on_board_message)
             self._signal_connected = True
@@ -810,20 +907,29 @@ class SensorConfigDialog(QDialog):
 
     def _on_scan_timeout(self):
         self._scan_done = True
-        matched = sum(1 for s in self._rom_state.values()
-                      if s['from_config'] and s['seen_on_bus'])
-        new_count = sum(1 for s in self._rom_state.values()
-                        if not s['from_config'] and s['seen_on_bus'])
-        missing = sum(1 for s in self._rom_state.values()
-                      if s['from_config'] and not s['seen_on_bus'])
+        matched = sum(
+            1 for s in self._rom_state.values() if s["from_config"] and s["seen_on_bus"]
+        )
+        new_count = sum(
+            1
+            for s in self._rom_state.values()
+            if not s["from_config"] and s["seen_on_bus"]
+        )
+        missing = sum(
+            1
+            for s in self._rom_state.values()
+            if s["from_config"] and not s["seen_on_bus"]
+        )
         on_bus_total = matched + new_count
         self._refresh_statuses()
-        parts = [f"Scan complete: {on_bus_total} on bus "
-                 f"({matched} matched, {new_count} new)"]
+        parts = [
+            f"Scan complete: {on_bus_total} on bus ({matched} matched, {new_count} new)"
+        ]
         if missing:
             parts.append(
                 f"{missing} config "
-                f"{'entries' if missing != 1 else 'entry'} not found on bus")
+                f"{'entries' if missing != 1 else 'entry'} not found on bus"
+            )
         self._end_scan(". ".join(parts) + ".")
 
     def _end_scan(self, msg):
@@ -859,30 +965,38 @@ class SensorConfigDialog(QDialog):
                 continue
             if name in _OW_RESERVED_KEYS:
                 QMessageBox.warning(
-                    self, "Reserved name",
+                    self,
+                    "Reserved name",
                     f"'{name}' is a reserved key in the 1-wire-sensors "
-                    "block. Choose a different name.")
+                    "block. Choose a different name.",
+                )
                 return None
             if name in new_map:
                 QMessageBox.warning(
-                    self, "Duplicate name",
-                    f"Name '{name}' is assigned to more than one sensor.")
+                    self,
+                    "Duplicate name",
+                    f"Name '{name}' is assigned to more than one sensor.",
+                )
                 return None
             new_map[name] = rom
 
         if unnamed_checked:
             reply = QMessageBox.question(
-                self, "Unnamed sensors",
+                self,
+                "Unnamed sensors",
                 f"{unnamed_checked} checked row(s) have no name and will be "
                 "skipped. Continue?",
-                QMessageBox.Yes | QMessageBox.No)
+                QMessageBox.Yes | QMessageBox.No,
+            )
             if reply != QMessageBox.Yes:
                 return None
 
         # Allowed sensor names = new 1-Wire names + existing thermistor names
         allowed_sensor_names = set(new_map.keys()) | set(
             self.thermistors_section.keys()
-            if isinstance(self.thermistors_section, dict) else [])
+            if isinstance(self.thermistors_section, dict)
+            else []
+        )
 
         # Collect heater assignments
         new_heaters = {}
@@ -894,40 +1008,39 @@ class SensorConfigDialog(QDialog):
         unknown_sensors = set()
         for r in range(self.heaters_table.rowCount()):
             heater_name = self.heaters_table.item(r, self.HCOL_NAME).text()
-            sensors_text = self.heaters_table.item(
-                r, self.HCOL_SENSORS).text()
-            sensor_list = [s.strip() for s in sensors_text.split(",")
-                           if s.strip()]
+            sensors_text = self.heaters_table.item(r, self.HCOL_SENSORS).text()
+            sensor_list = [s.strip() for s in sensors_text.split(",") if s.strip()]
             for s in sensor_list:
                 if s not in allowed_sensor_names:
                     unknown_sensors.add(s)
             if heater_name in new_heaters and isinstance(
-                    new_heaters[heater_name], dict):
+                new_heaters[heater_name], dict
+            ):
                 new_heaters[heater_name]["sensors"] = sensor_list
 
         if unknown_sensors:
             reply = QMessageBox.question(
-                self, "Unknown sensor names",
+                self,
+                "Unknown sensor names",
                 "The following sensor names are referenced by heaters but "
                 "not defined as 1-Wire sensors or thermistors:\n\n"
                 + ", ".join(sorted(unknown_sensors))
                 + "\n\nContinue anyway? (The firmware will likely log a "
                 "warning at boot.)",
-                QMessageBox.Yes | QMessageBox.No)
+                QMessageBox.Yes | QMessageBox.No,
+            )
             if reply != QMessageBox.Yes:
                 return None
 
         # Rebuild the 1-wire-sensors block: preserve bus-level keys
-        new_ow = {k: v for k, v in self.ow_section.items()
-                  if k in _OW_RESERVED_KEYS}
+        new_ow = {k: v for k, v in self.ow_section.items() if k in _OW_RESERVED_KEYS}
         new_ow.setdefault("pin", 13)
         new_ow.setdefault("conv_mode", 4)
         new_ow.setdefault("resolution", 16)
         for name, rom in new_map.items():
             new_ow[name] = rom
 
-        new_cfg = (dict(self.config_data)
-                   if isinstance(self.config_data, dict) else {})
+        new_cfg = dict(self.config_data) if isinstance(self.config_data, dict) else {}
         new_cfg.setdefault("temperature_sensors", {})
         if isinstance(new_cfg["temperature_sensors"], dict):
             new_cfg["temperature_sensors"]["1-wire-sensors"] = new_ow
@@ -948,8 +1061,8 @@ class SensorConfigDialog(QDialog):
             return True
         except Exception as e:
             QMessageBox.critical(
-                self, "Save failed",
-                f"Could not write {FIRMWARE_CONFIG_PATH}:\n{e}")
+                self, "Save failed", f"Could not write {FIRMWARE_CONFIG_PATH}:\n{e}"
+            )
             return False
 
     def _on_save_local(self):
@@ -959,10 +1072,12 @@ class SensorConfigDialog(QDialog):
         if not self._write_local(new_cfg):
             return
         QMessageBox.information(
-            self, "Saved",
+            self,
+            "Saved",
             f"Wrote {FIRMWARE_CONFIG_PATH}.\n\n"
             "Re-upload the firmware (or use the Push to Board button) "
-            "for the board to pick up the changes.")
+            "for the board to pick up the changes.",
+        )
         self.accept()
 
     def _on_save_and_push(self):
@@ -971,23 +1086,28 @@ class SensorConfigDialog(QDialog):
             return
         if self.board is None or not self.board.connected:
             QMessageBox.warning(
-                self, "Not connected",
-                "Push requires an active USB connection to the board.")
+                self,
+                "Not connected",
+                "Push requires an active USB connection to the board.",
+            )
             return
         # Only support serial-mode push (mpremote talks serial). BLE
         # connections can't be reused by mpremote.
         if getattr(self.board, "connection_mode", None) != self.board.MODE_SERIAL:
             QMessageBox.warning(
-                self, "USB connection required",
+                self,
+                "USB connection required",
                 "Push to board is only supported over USB serial. "
-                "Switch to USB and try again.")
+                "Switch to USB and try again.",
+            )
             return
         port = getattr(self.board, "port", None)
         if not port:
             QMessageBox.warning(
-                self, "No serial port",
-                "Could not determine the board's serial port. Reconnect "
-                "and try again.")
+                self,
+                "No serial port",
+                "Could not determine the board's serial port. Reconnect and try again.",
+            )
             return
         if not self._write_local(new_cfg):
             return
@@ -1005,12 +1125,12 @@ class SensorConfigDialog(QDialog):
         if not mpremote:
             return False, (
                 "mpremote not found in PATH. Install it with "
-                "`pip install mpremote` and try again.")
+                "`pip install mpremote` and try again."
+            )
 
         # Disconnect parent UI from the board so mpremote can take the port.
         try:
-            if self._parent_ui is not None and hasattr(
-                    self._parent_ui, "disconnect"):
+            if self._parent_ui is not None and hasattr(self._parent_ui, "disconnect"):
                 self._parent_ui.disconnect()
             else:
                 self.board.close()
@@ -1022,21 +1142,22 @@ class SensorConfigDialog(QDialog):
         time.sleep(1.0)
 
         cp_result = None
-        reset_result = None
         try:
             cp_result = subprocess.run(
-                [mpremote, "connect", port, "cp",
-                 FIRMWARE_CONFIG_PATH, ":config.json"],
-                capture_output=True, text=True,
+                [mpremote, "connect", port, "cp", FIRMWARE_CONFIG_PATH, ":config.json"],
+                capture_output=True,
+                text=True,
                 timeout=self.MPREMOTE_TIMEOUT_S,
             )
             if cp_result.returncode != 0:
                 return False, (
                     f"mpremote cp failed (exit {cp_result.returncode}):\n"
-                    f"{cp_result.stderr or cp_result.stdout}")
-            reset_result = subprocess.run(
+                    f"{cp_result.stderr or cp_result.stdout}"
+                )
+            subprocess.run(
                 [mpremote, "connect", port, "reset"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
                 timeout=self.MPREMOTE_TIMEOUT_S,
             )
             # reset always returns immediately even if board reboots;
@@ -1044,7 +1165,8 @@ class SensorConfigDialog(QDialog):
         except subprocess.TimeoutExpired:
             return False, (
                 f"mpremote timed out after {self.MPREMOTE_TIMEOUT_S}s. "
-                "Board may need a manual reset.")
+                "Board may need a manual reset."
+            )
         except Exception as e:
             return False, f"mpremote invocation failed: {e}"
         finally:
@@ -1053,14 +1175,16 @@ class SensorConfigDialog(QDialog):
             time.sleep(2.0)  # let the board reboot
             try:
                 if self._parent_ui is not None and hasattr(
-                        self._parent_ui, "connect_usb"):
+                    self._parent_ui, "connect_usb"
+                ):
                     self._parent_ui.connect_usb()
             except Exception:
                 pass
 
         return True, (
             f"Pushed {FIRMWARE_CONFIG_PATH} to the board and reset it. "
-            "UI is reconnecting.")
+            "UI is reconnecting."
+        )
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -1129,10 +1253,10 @@ class HeaterControlUI(QMainWindow):
 
         # Calibration data structures
         self.calibration_data = {
-            'timestamps': [],
-            'temperatures': [],
-            'pwm_values': [],
-            'setpoints': []
+            "timestamps": [],
+            "temperatures": [],
+            "pwm_values": [],
+            "setpoints": [],
         }
         self.calibration_active = False
         self.calibration_method = None
@@ -1161,19 +1285,17 @@ class HeaterControlUI(QMainWindow):
                 cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
         except OSError:
             cfg = {
-                    "heater_control": {
-                        "compensation_rate": DEFAULT_COMPENSATION_RATE,
-                        "compensation_offset": DEFAULT_COMPENSATION_OFFSET
-                        },
-                    "serial": {
-                        "baudrate": DEFAULT_BAUDRATE,
-                        "pid": DEFAULT_PID,
-                        "vid": DEFAULT_VID
-                        },
-                    "zmq": {
-                        "port": DEFAULT_ZMQ_PORT
-                        }
-                    }
+                "heater_control": {
+                    "compensation_rate": DEFAULT_COMPENSATION_RATE,
+                    "compensation_offset": DEFAULT_COMPENSATION_OFFSET,
+                },
+                "serial": {
+                    "baudrate": DEFAULT_BAUDRATE,
+                    "pid": DEFAULT_PID,
+                    "vid": DEFAULT_VID,
+                },
+                "zmq": {"port": DEFAULT_ZMQ_PORT},
+            }
         return cfg
 
     def init_ui(self):
@@ -1217,10 +1339,10 @@ class HeaterControlUI(QMainWindow):
 
         # Populate ports on startup
         self.refresh_serial_ports()
-        
+
         # Apply compensation settings
         self.on_compensation_changed()
-        
+
         # Apply system-aware styling
         self.apply_system_theme()
 
@@ -1428,7 +1550,8 @@ class HeaterControlUI(QMainWindow):
         self.identify_ports_btn.setToolTip(
             "Probe every matching port for its whoami response and label\n"
             "the dropdown with device_id / UID so multiple Picos can be told\n"
-            "apart.")
+            "apart."
+        )
         port_layout.addWidget(self.identify_ports_btn)
 
         conn_layout.addLayout(port_layout)
@@ -1441,7 +1564,8 @@ class HeaterControlUI(QMainWindow):
         self.board_id_label = QLabel("Board: -")
         self.board_id_label.setToolTip(
             "Identity of the connected board (device_id + hardware UID).\n"
-            "Set device_id under the top-level key in firmware/config.json.")
+            "Set device_id under the top-level key in firmware/config.json."
+        )
         conn_layout.addWidget(self.board_id_label)
 
         layout.addWidget(conn_group)
@@ -1464,7 +1588,9 @@ class HeaterControlUI(QMainWindow):
         self.sensor_group_combo.addItems(["thermistors", "onewire", "all", "None"])
         self.sensor_group_combo.setCurrentText("thermistors")
         self.sensor_group_combo.currentTextChanged.connect(self.on_sensor_group_changed)
-        self.sensor_group_combo.setToolTip("Select which sensor group to monitor/use for PID control")
+        self.sensor_group_combo.setToolTip(
+            "Select which sensor group to monitor/use for PID control"
+        )
         heater_layout.addWidget(self.sensor_group_combo, 1, 1)
 
         # Setpoint control
@@ -1482,21 +1608,25 @@ class HeaterControlUI(QMainWindow):
         heater_layout.addWidget(QLabel("Compensation Rate:"), 3, 0)
         self.compensation_rate_spin = QDoubleSpinBox()
         self.compensation_rate_spin.setRange(-10, 10)
-        self.compensation_rate_spin.setValue(self.config['heater_control']['compensation_rate'])
+        self.compensation_rate_spin.setValue(
+            self.config["heater_control"]["compensation_rate"]
+        )
         self.compensation_rate_spin.setDecimals(2)
         self.compensation_rate_spin.setSingleStep(0.01)
         self.compensation_rate_spin.valueChanged.connect(self.on_compensation_changed)
         heater_layout.addWidget(self.compensation_rate_spin, 3, 1)
-        
+
         heater_layout.addWidget(QLabel("Compensation Offset (°C):"), 4, 0)
         self.compensation_offset_spin = QDoubleSpinBox()
         self.compensation_offset_spin.setRange(-100, 100)
-        self.compensation_offset_spin.setValue(self.config['heater_control']['compensation_offset'])
+        self.compensation_offset_spin.setValue(
+            self.config["heater_control"]["compensation_offset"]
+        )
         self.compensation_offset_spin.setDecimals(2)
         self.compensation_offset_spin.setSingleStep(0.01)
         self.compensation_offset_spin.valueChanged.connect(self.on_compensation_changed)
         heater_layout.addWidget(self.compensation_offset_spin, 4, 1)
-        
+
         # Stream control toggle button
         self.stream_toggle_btn = QPushButton("Start Stream")
         self.stream_toggle_btn.setCheckable(True)
@@ -1514,7 +1644,9 @@ class HeaterControlUI(QMainWindow):
             }
         """)
         self.stream_toggle_btn.clicked.connect(self.toggle_stream)
-        self.stream_toggle_btn.setToolTip("Start/stop temperature streaming and control (Ctrl+S)")
+        self.stream_toggle_btn.setToolTip(
+            "Start/stop temperature streaming and control (Ctrl+S)"
+        )
         self.stream_toggle_btn.setShortcut("Ctrl+S")
         heater_layout.addWidget(self.stream_toggle_btn, 5, 0)
 
@@ -1522,7 +1654,9 @@ class HeaterControlUI(QMainWindow):
         self.pid_toggle_btn = QCheckBox("PID Control")
         self.pid_toggle_btn.setChecked(False)
         self.pid_toggle_btn.clicked.connect(self.on_pid_toggled)
-        self.pid_toggle_btn.setToolTip("Enable PID temperature control mode (unchecked = stream only)")
+        self.pid_toggle_btn.setToolTip(
+            "Enable PID temperature control mode (unchecked = stream only)"
+        )
         heater_layout.addWidget(self.pid_toggle_btn, 5, 1)
 
         # Manual PWM control (TEC1 & TEC2 are dependent)
@@ -1534,7 +1668,9 @@ class HeaterControlUI(QMainWindow):
 
         self.pwm_apply_btn = QPushButton("Apply PWM")
         self.pwm_apply_btn.clicked.connect(self.apply_manual_pwm)
-        self.pwm_apply_btn.setToolTip("Apply manual PWM value to heater (bypass PID control)")
+        self.pwm_apply_btn.setToolTip(
+            "Apply manual PWM value to heater (bypass PID control)"
+        )
         heater_layout.addWidget(self.pwm_apply_btn, 7, 0, 1, 2)
 
         layout.addWidget(heater_group)
@@ -1563,7 +1699,9 @@ class HeaterControlUI(QMainWindow):
 
         self.logging_checkbox = QCheckBox("Enable Logging")
         self.logging_checkbox.toggled.connect(self.on_logging_toggled)
-        self.logging_checkbox.setToolTip("Log all temperature and control data to JSON file")
+        self.logging_checkbox.setToolTip(
+            "Log all temperature and control data to JSON file"
+        )
         log_layout.addWidget(self.logging_checkbox)
 
         self.log_folder_btn = QPushButton("Open Log Folder")
@@ -1722,13 +1860,17 @@ class HeaterControlUI(QMainWindow):
 
         self.save_profile_btn = QPushButton("Save Profile")
         self.save_profile_btn.clicked.connect(self.save_profile)
-        self.save_profile_btn.setStyleSheet("QPushButton { background-color: #9C27B0; }")
+        self.save_profile_btn.setStyleSheet(
+            "QPushButton { background-color: #9C27B0; }"
+        )
         self.save_profile_btn.setToolTip("Save current profile to JSON file")
         profile_io_layout.addWidget(self.save_profile_btn)
 
         self.load_profile_btn = QPushButton("Load Profile")
         self.load_profile_btn.clicked.connect(self.load_profile)
-        self.load_profile_btn.setStyleSheet("QPushButton { background-color: #607D8B; }")
+        self.load_profile_btn.setStyleSheet(
+            "QPushButton { background-color: #607D8B; }"
+        )
         self.load_profile_btn.setToolTip("Load profile from JSON file")
         profile_io_layout.addWidget(self.load_profile_btn)
 
@@ -1741,14 +1883,17 @@ class HeaterControlUI(QMainWindow):
 
         self.start_profile_btn = QPushButton("Start Profile")
         self.start_profile_btn.clicked.connect(self.start_temperature_profile)
-        self.start_profile_btn.setStyleSheet("QPushButton { background-color: #2196F3; }")
+        self.start_profile_btn.setStyleSheet(
+            "QPushButton { background-color: #2196F3; }"
+        )
         # profile_control_layout.addWidget(self.start_profile_btn)
         step_buttons_layout.addWidget(self.start_profile_btn)
 
-
         self.stop_profile_btn = QPushButton("Stop Profile")
         self.stop_profile_btn.clicked.connect(self.stop_temperature_profile)
-        self.stop_profile_btn.setStyleSheet("QPushButton { background-color: #FF9800; }")
+        self.stop_profile_btn.setStyleSheet(
+            "QPushButton { background-color: #FF9800; }"
+        )
         self.stop_profile_btn.setEnabled(False)
         # profile_control_layout.addWidget(self.stop_profile_btn)
         step_buttons_layout.addWidget(self.stop_profile_btn)
@@ -1762,7 +1907,8 @@ class HeaterControlUI(QMainWindow):
         self.skip_step_btn.setEnabled(False)
         self.skip_step_btn.setToolTip(
             "Skip the current profile step while running, without stopping\n"
-            "the profile. The next execution item starts immediately.")
+            "the profile. The next execution item starts immediately."
+        )
         step_buttons_layout.addWidget(self.skip_step_btn)
 
         # profile_layout.addLayout(profile_control_layout)
@@ -1832,7 +1978,7 @@ class HeaterControlUI(QMainWindow):
         self.zn_kp_step_spin = QSpinBox()
         self.zn_kp_step_spin.setRange(1, 20)
         self.zn_kp_step_spin.setValue(5)
-        zn_layout.addWidget(self.zn_kp_step_spin, 3, 1) 
+        zn_layout.addWidget(self.zn_kp_step_spin, 3, 1)
 
         zn_layout.addWidget(QLabel("Duration (s):"), 4, 0)
         self.zn_kp_duration_spin = QSpinBox()
@@ -1913,7 +2059,9 @@ class HeaterControlUI(QMainWindow):
         self.calib_results_text = QTextEdit()
         self.calib_results_text.setMaximumHeight(85)
         self.calib_results_text.setReadOnly(True)
-        self.calib_results_text.setPlaceholderText("Calibration results will appear here...")
+        self.calib_results_text.setPlaceholderText(
+            "Calibration results will appear here..."
+        )
         calib_group_layout.addWidget(self.calib_results_text)
 
         # PID Parameters group (moved from main control panel)
@@ -1952,7 +2100,8 @@ class HeaterControlUI(QMainWindow):
         self.apply_pid_btn.clicked.connect(self.apply_pid_parameters)
         self.apply_pid_btn.setStyleSheet("QPushButton { background-color: #9C27B0; }")
         self.apply_pid_btn.setToolTip(
-            "Send the kp/ki/kd values above to the board (in-memory only).")
+            "Send the kp/ki/kd values above to the board (in-memory only)."
+        )
         pid_layout.addWidget(self.apply_pid_btn, 3, 0, 1, 2)
 
         # Persist current PID tunings to the board's flash so they survive
@@ -1962,7 +2111,8 @@ class HeaterControlUI(QMainWindow):
         self.save_pid_btn.setStyleSheet("QPushButton { background-color: #00897B; }")
         self.save_pid_btn.setToolTip(
             "Write the current PID tunings on the board back to config.json\n"
-            "on the Pico's filesystem so they persist across reboots.")
+            "on the Pico's filesystem so they persist across reboots."
+        )
         pid_layout.addWidget(self.save_pid_btn, 4, 0, 1, 2)
 
         # Refresh PID values button
@@ -2011,7 +2161,7 @@ class HeaterControlUI(QMainWindow):
                 addr="auto",
                 baudrate=115200,
                 connection_mode=Board.MODE_SERIAL,
-                logger=board_logger
+                logger=board_logger,
             )
 
             # Connect signals
@@ -2044,14 +2194,16 @@ class HeaterControlUI(QMainWindow):
                     )
                 if self.current_kp not in self.kp_test_data:
                     self.kp_test_data[self.current_kp] = {
-                        'timestamps': [],
-                        'temperatures': [],
-                        'pwm_values': []
+                        "timestamps": [],
+                        "temperatures": [],
+                        "pwm_values": [],
                     }
 
             elif message.lower().startswith("temperature reached target"):
                 self.test_phase = "collecting"
-                self.log_message("Temperature reached target - starting data collection")
+                self.log_message(
+                    "Temperature reached target - starting data collection"
+                )
 
             elif message.lower().startswith("cooling down for "):
                 self.test_phase = "cooling"
@@ -2092,10 +2244,10 @@ class HeaterControlUI(QMainWindow):
 
             # Clear previous calibration data
             self.calibration_data = {
-                'timestamps': [],
-                'temperatures': [],
-                'pwm_values': [],
-                'setpoints': []
+                "timestamps": [],
+                "temperatures": [],
+                "pwm_values": [],
+                "setpoints": [],
             }
 
             # Reset monitoring variables
@@ -2121,7 +2273,10 @@ class HeaterControlUI(QMainWindow):
 
             # Start ZN calibration with available commands
             self.log_message("Starting Ziegler-Nichols calibration...")
-            self.log_message(f"Target: {target_temp}°C, Min Kp: {min_kp}, Max Kp: {max_kp}, Step: {kp_step}")
+            self.log_message(
+                f"Target: {target_temp}°C, Min Kp: {min_kp}, "
+                f"Max Kp: {max_kp}, Step: {kp_step}"
+            )
             self.log_message(f"Duration: {duration}s, Cool Down: {cool_down_duration}s")
 
             # Set temperature update frequency to 0.2 seconds
@@ -2132,33 +2287,39 @@ class HeaterControlUI(QMainWindow):
             if sensor_group == "None":
                 cmd = self.get_heater_cmd(f"pid_{{heater}}_{target_temp}")
             else:
-                cmd = self.get_heater_cmd(f"pid_{{heater}}_{target_temp}_{sensor_group}")
+                cmd = self.get_heater_cmd(
+                    f"pid_{{heater}}_{target_temp}_{sensor_group}"
+                )
             self.send_cmd_with_log(cmd)
 
             # Start calibration cycle
-            self.start_zn_calibration_cycle(min_kp, max_kp, kp_step, duration, cool_down_duration, target_temp)
+            self.start_zn_calibration_cycle(
+                min_kp, max_kp, kp_step, duration, cool_down_duration, target_temp
+            )
 
         except Exception as e:
             self.log_message(f"Error starting ZN calibration: {e}")
             self.calibration_active = False
 
-    def start_zn_calibration_cycle(self, min_kp, max_kp, kp_step, duration, cool_down_duration, target_temp):
+    def start_zn_calibration_cycle(
+        self, min_kp, max_kp, kp_step, duration, cool_down_duration, target_temp
+    ):
         """Start the ZN calibration cycle with PID enable/disable"""
         self.zn_calibration_params = {
-            'min_kp': min_kp,
-            'max_kp': max_kp,
-            'kp_step': kp_step,
-            'duration': duration,
-            'cool_down_duration': cool_down_duration,
-            'target_temp': target_temp,
-            'current_kp': min_kp,
-            'phase': 'testing',  # 'testing' or 'cooldown'
-            'phase_start_time': time.time(),
-            'test_data': []
+            "min_kp": min_kp,
+            "max_kp": max_kp,
+            "kp_step": kp_step,
+            "duration": duration,
+            "cool_down_duration": cool_down_duration,
+            "target_temp": target_temp,
+            "current_kp": min_kp,
+            "phase": "testing",  # 'testing' or 'cooldown'
+            "phase_start_time": time.time(),
+            "test_data": [],
         }
 
         # Start with first Kp value
-        self.update_kp_and_start_test(self.zn_calibration_params['current_kp'])
+        self.update_kp_and_start_test(self.zn_calibration_params["current_kp"])
 
         # No timer needed - monitoring will be done via telemetry data
         self.log_message("ZN calibration started")
@@ -2176,17 +2337,19 @@ class HeaterControlUI(QMainWindow):
         # Update UI
         self.current_kp = kp_value
         self.current_kp_label.setText(f"Current Kp: {kp_value}")
-        self.zn_calibration_params['phase'] = 'warming_up'
-        self.zn_calibration_params['phase_start_time'] = time.time()
-        self.zn_calibration_params['test_data'] = []
-        self.zn_calibration_params['setpoint_reached'] = False
-        self.zn_calibration_params['setpoint_reach_time'] = None
+        self.zn_calibration_params["phase"] = "warming_up"
+        self.zn_calibration_params["phase_start_time"] = time.time()
+        self.zn_calibration_params["test_data"] = []
+        self.zn_calibration_params["setpoint_reached"] = False
+        self.zn_calibration_params["setpoint_reach_time"] = None
         setpoint = self.setpoint_spin.value()
-        self.log_message(f"Starting test with Kp = {kp_value} - waiting for setpoint {setpoint}°C...")
+        self.log_message(
+            f"Starting test with Kp = {kp_value} - waiting for setpoint {setpoint}°C..."
+        )
 
     def monitor_zn_calibration(self):
         """Monitor ZN calibration phases and switch between testing and cooldown"""
-        if not self.calibration_active or not hasattr(self, 'zn_calibration_params'):
+        if not self.calibration_active or not hasattr(self, "zn_calibration_params"):
             return
 
         # Ensure stop button stays enabled during calibration
@@ -2195,63 +2358,84 @@ class HeaterControlUI(QMainWindow):
 
         params = self.zn_calibration_params
         current_time = time.time()
-        phase_elapsed = current_time - params['phase_start_time']
+        phase_elapsed = current_time - params["phase_start_time"]
 
-        if params['phase'] == 'warming_up':
+        if params["phase"] == "warming_up":
             # Waiting for setpoint to be reached - check temperature
             if self.current_temperature is not None:
                 setpoint = self.zn_temp_spin.value()
                 temp_diff = abs(self.current_temperature - setpoint)
 
-                if temp_diff <= ZN_SETPOINT_TOLERANCE and not params['setpoint_reached']:
+                if (
+                    temp_diff <= ZN_SETPOINT_TOLERANCE
+                    and not params["setpoint_reached"]
+                ):
                     # Setpoint reached for the first time
-                    params['setpoint_reached'] = True
-                    params['setpoint_reach_time'] = current_time
-                    params['phase'] = 'testing'
-                    params['phase_start_time'] = current_time  # Reset timer for testing phase
-                    self.log_message(f"Setpoint reached! Starting data collection for Kp={params['current_kp']}")
+                    params["setpoint_reached"] = True
+                    params["setpoint_reach_time"] = current_time
+                    params["phase"] = "testing"
+                    params["phase_start_time"] = (
+                        current_time  # Reset timer for testing phase
+                    )
+                    self.log_message(
+                        f"Setpoint reached! Starting data collection for "
+                        f"Kp={params['current_kp']}"
+                    )
 
-        elif params['phase'] == 'testing':
+        elif params["phase"] == "testing":
             # Testing phase - collect data (only after setpoint reached)
-            if params['setpoint_reached']:
-                test_elapsed = current_time - params['setpoint_reach_time']
-                if test_elapsed >= params['duration']:
+            if params["setpoint_reached"]:
+                test_elapsed = current_time - params["setpoint_reach_time"]
+                if test_elapsed >= params["duration"]:
                     # Testing phase complete, switch to cooldown
-                    self.log_message(f"Testing phase complete for Kp={params['current_kp']}")
+                    self.log_message(
+                        f"Testing phase complete for Kp={params['current_kp']}"
+                    )
                     self.start_cooldown_phase()
 
-        elif params['phase'] == 'cooldown':
+        elif params["phase"] == "cooldown":
             # Cooldown phase - PID disabled, analyze data for oscillations
-            if not params.get('cooldown_analysis_done', False):
+            if not params.get("cooldown_analysis_done", False):
                 # Perform oscillation analysis during cooldown
-                self.log_message(f"Analyzing data for Kp={params['current_kp']} during cooldown...")
-                oscillation_detected = self.analyze_kp_test_data(params['current_kp'])
+                self.log_message(
+                    f"Analyzing data for Kp={params['current_kp']} during cooldown..."
+                )
+                oscillation_detected = self.analyze_kp_test_data(params["current_kp"])
 
                 if oscillation_detected:
-                    # Oscillation found! Store critical parameters and finish calibration
-                    critical_gain = self.oscillation_stats['critical_gain']
-                    critical_period = self.oscillation_stats['oscillation_period']
-                    amplitude = self.oscillation_stats['oscillation_amplitude']
+                    # Oscillation found! Store critical parameters and finish
+                    # calibration
+                    critical_gain = self.oscillation_stats["critical_gain"]
+                    critical_period = self.oscillation_stats["oscillation_period"]
+                    amplitude = self.oscillation_stats["oscillation_amplitude"]
 
                     # Update display to show critical gain found
                     self.current_kp_label.setText(f"Critical Kp: {critical_gain:.1f} ✓")
-                    self.current_kp_label.setStyleSheet("color: green; font-weight: bold;")
+                    self.current_kp_label.setStyleSheet(
+                        "color: green; font-weight: bold;"
+                    )
 
-                    self.log_message(f"Critical gain found! Kp={critical_gain:.1f}, "
-                                     f"Period={critical_period:.1f}s, Amplitude={amplitude:.2f}°C")
-                    self.log_message("Finishing calibration early due to oscillation detection...")
+                    self.log_message(
+                        f"Critical gain found! Kp={critical_gain:.1f}, "
+                        f"Period={critical_period:.1f}s, Amplitude={amplitude:.2f}°C"
+                    )
+                    self.log_message(
+                        "Finishing calibration early due to oscillation detection..."
+                    )
 
                     # Finish calibration immediately
                     self.finish_zn_calibration()
                     return
                 else:
                     # No oscillation detected, mark analysis as done
-                    params['cooldown_analysis_done'] = True
+                    params["cooldown_analysis_done"] = True
 
             # Continue with normal cooldown timing
-            if phase_elapsed >= params['cool_down_duration']:
+            if phase_elapsed >= params["cool_down_duration"]:
                 # Cooldown complete, move to next Kp or finish
-                self.log_message(f"Cooldown phase complete for Kp={params['current_kp']}")
+                self.log_message(
+                    f"Cooldown phase complete for Kp={params['current_kp']}"
+                )
                 self.move_to_next_kp()
 
     def start_cooldown_phase(self):
@@ -2259,29 +2443,31 @@ class HeaterControlUI(QMainWindow):
         cmd = self.get_heater_cmd("pid_{heater}_disable")
         self.send_cmd_with_log(cmd)
 
-        self.zn_calibration_params['phase'] = 'cooldown'
-        self.zn_calibration_params['phase_start_time'] = time.time()
-        self.zn_calibration_params['cooldown_analysis_done'] = False  # Reset analysis flag
+        self.zn_calibration_params["phase"] = "cooldown"
+        self.zn_calibration_params["phase_start_time"] = time.time()
+        self.zn_calibration_params["cooldown_analysis_done"] = (
+            False  # Reset analysis flag
+        )
 
     def move_to_next_kp(self):
         """Move to next Kp value or finish calibration"""
         params = self.zn_calibration_params
-        params['current_kp'] += params['kp_step']
+        params["current_kp"] += params["kp_step"]
 
-        if params['current_kp'] > params['max_kp']:
+        if params["current_kp"] > params["max_kp"]:
             # Calibration complete
             self.log_message("ZN calibration complete!")
             self.finish_zn_calibration()
         else:
             # Reset test data for next Kp value
-            params['test_data'] = []
-            params['setpoint_reached'] = False
-            params['setpoint_reach_time'] = None
-            params['cooldown_analysis_done'] = False
+            params["test_data"] = []
+            params["setpoint_reached"] = False
+            params["setpoint_reach_time"] = None
+            params["cooldown_analysis_done"] = False
 
             # Start next test
             self.log_message(f"Starting test for Kp={params['current_kp']}")
-            self.update_kp_and_start_test(params['current_kp'])
+            self.update_kp_and_start_test(params["current_kp"])
 
     def finish_zn_calibration(self):
         """Finish ZN calibration and calculate results"""
@@ -2315,9 +2501,9 @@ class HeaterControlUI(QMainWindow):
     # command, capture §TEMP frames, fit a first-order-plus-dead-time
     # model on the host, and propose PID gains from that model.
 
-    OL_MAX_TEMP       = 90.0   # safety cutoff during the step (°C)
-    OL_COOL_TIMEOUT_S = 600    # max wait for between-rep cooldown (s)
-    OL_COOL_TOL_C     = 1.0    # how close to baseline counts as cooled
+    OL_MAX_TEMP = 90.0  # safety cutoff during the step (°C)
+    OL_COOL_TIMEOUT_S = 600  # max wait for between-rep cooldown (s)
+    OL_COOL_TOL_C = 1.0  # how close to baseline counts as cooled
 
     @Slot()
     def start_open_loop_calibration(self):
@@ -2339,13 +2525,13 @@ class HeaterControlUI(QMainWindow):
 
         self.calibration_active = True
         self.calibration_method = "open_loop"
-        self.ol_phase = 'step'
+        self.ol_phase = "step"
         self.ol_rep = 1
         self.ol_phase_start = time.time()
         self.ol_step_time = time.time()
-        self.ol_reps_data = []        # one dict per rep: {baseline, samples}
-        self.ol_samples = []          # samples for the current rep
-        self.ol_baseline = None       # baseline of the current rep
+        self.ol_reps_data = []  # one dict per rep: {baseline, samples}
+        self.ol_samples = []  # samples for the current rep
+        self.ol_baseline = None  # baseline of the current rep
         self.pre_calibration_stream_state = self.stream_active
         self.calibration_results = None
 
@@ -2364,11 +2550,13 @@ class HeaterControlUI(QMainWindow):
         # frame doesn't carry pwm_tec*).
         self.pwm_value = self.ol_pwm_step
         self.send_cmd_with_log(
-            self.get_heater_cmd(f"pwm_{{heater}}_{self.ol_pwm_step}"))
+            self.get_heater_cmd(f"pwm_{{heater}}_{self.ol_pwm_step}")
+        )
 
         self.calib_status_label.setText(
             f"Calibration: Open-Loop rep 1/{self.ol_reps_total} "
-            f"@ {self.ol_pwm_step}% PWM")
+            f"@ {self.ol_pwm_step}% PWM"
+        )
         self.calib_status_label.setStyleSheet("color: orange; font-weight: bold;")
         self.calib_stop_btn.setEnabled(True)
         self.zn_start_btn.setEnabled(False)
@@ -2377,19 +2565,24 @@ class HeaterControlUI(QMainWindow):
         self.calib_results_text.clear()
         self.log_message(
             f"Open-loop calibration started — {self.ol_reps_total} rep(s) "
-            f"of {self.ol_pwm_step}% PWM for {self.ol_duration_s}s each.")
+            f"of {self.ol_pwm_step}% PWM for {self.ol_duration_s}s each."
+        )
 
     def _on_openloop_telemetry(self, data, frame):
         """State machine: step -> cooldown -> next step -> ... -> done."""
-        if not self.calibration_active or self.calibration_method != 'open_loop':
+        if not self.calibration_active or self.calibration_method != "open_loop":
             return
 
         T = None
-        if frame == 'TEMP':
-            temps = data.get('temperatures') or {}
-            vals = [v for k, v in temps.items()
-                    if k.startswith('thermistor')
-                    and v is not None and v > INVALID_TEMP_THRESHOLD]
+        if frame == "TEMP":
+            temps = data.get("temperatures") or {}
+            vals = [
+                v
+                for k, v in temps.items()
+                if k.startswith("thermistor")
+                and v is not None
+                and v > INVALID_TEMP_THRESHOLD
+            ]
             if vals:
                 T = sum(vals) / len(vals)
         if T is None:
@@ -2398,7 +2591,7 @@ class HeaterControlUI(QMainWindow):
         now = time.time()
         phase_elapsed = now - self.ol_phase_start
 
-        if self.ol_phase == 'step':
+        if self.ol_phase == "step":
             # First sample of the rep is the baseline (we just commanded
             # the PWM step; the system has barely begun to respond).
             if self.ol_baseline is None:
@@ -2409,35 +2602,40 @@ class HeaterControlUI(QMainWindow):
             if T >= self.OL_MAX_TEMP:
                 self.log_message(
                     f"Safety cutoff hit: T={T:.2f}°C ≥ "
-                    f"{self.OL_MAX_TEMP:.1f}°C. Stopping.")
+                    f"{self.OL_MAX_TEMP:.1f}°C. Stopping."
+                )
                 self.pwm_value = 0
                 self.send_cmd_with_log(self.get_heater_cmd("pwm_{heater}_0"))
-                self.ol_reps_data.append({'baseline': self.ol_baseline,
-                                          'samples': list(self.ol_samples)})
+                self.ol_reps_data.append(
+                    {"baseline": self.ol_baseline, "samples": list(self.ol_samples)}
+                )
                 self._finalise_openloop()
                 return
 
             if phase_elapsed >= self.ol_duration_s:
-                self.ol_reps_data.append({'baseline': self.ol_baseline,
-                                          'samples': list(self.ol_samples)})
+                self.ol_reps_data.append(
+                    {"baseline": self.ol_baseline, "samples": list(self.ol_samples)}
+                )
                 self.pwm_value = 0
                 self.send_cmd_with_log(self.get_heater_cmd("pwm_{heater}_0"))
                 self.log_message(
                     f"Rep {self.ol_rep}/{self.ol_reps_total} done "
                     f"({len(self.ol_samples)} samples, "
-                    f"ΔT={T - self.ol_baseline:+.2f}°C).")
+                    f"ΔT={T - self.ol_baseline:+.2f}°C)."
+                )
                 if self.ol_rep >= self.ol_reps_total:
                     self._finalise_openloop()
                     return
-                self.ol_phase = 'cooldown'
+                self.ol_phase = "cooldown"
                 self.ol_phase_start = time.time()
                 self.calib_status_label.setText(
                     f"Calibration: Open-Loop cooldown after rep "
-                    f"{self.ol_rep}/{self.ol_reps_total}")
+                    f"{self.ol_rep}/{self.ol_reps_total}"
+                )
             return
 
-        if self.ol_phase == 'cooldown':
-            target_T = self.ol_reps_data[-1]['baseline'] + self.OL_COOL_TOL_C
+        if self.ol_phase == "cooldown":
+            target_T = self.ol_reps_data[-1]["baseline"] + self.OL_COOL_TOL_C
             cooled = T <= target_T
             timed_out = phase_elapsed >= self.OL_COOL_TIMEOUT_S
             if cooled or timed_out:
@@ -2445,24 +2643,27 @@ class HeaterControlUI(QMainWindow):
                     self.log_message(
                         f"Cooldown timed out at {T:.2f}°C "
                         f"(target {target_T:.2f}°C); starting next rep "
-                        f"anyway.")
+                        f"anyway."
+                    )
                 else:
                     self.log_message(
-                        f"Cooled to {T:.2f}°C — starting rep "
-                        f"{self.ol_rep + 1}.")
+                        f"Cooled to {T:.2f}°C — starting rep {self.ol_rep + 1}."
+                    )
                 self.ol_rep += 1
                 self.ol_samples = []
                 self.ol_baseline = None
                 self.pwm_value = self.ol_pwm_step
                 self.send_cmd_with_log(
-                    self.get_heater_cmd(f"pwm_{{heater}}_{self.ol_pwm_step}"))
-                self.ol_phase = 'step'
+                    self.get_heater_cmd(f"pwm_{{heater}}_{self.ol_pwm_step}")
+                )
+                self.ol_phase = "step"
                 self.ol_phase_start = time.time()
                 self.ol_step_time = time.time()
                 self.calib_status_label.setText(
                     f"Calibration: Open-Loop rep "
                     f"{self.ol_rep}/{self.ol_reps_total} "
-                    f"@ {self.ol_pwm_step}% PWM")
+                    f"@ {self.ol_pwm_step}% PWM"
+                )
             return
 
     def _stop_openloop(self):
@@ -2498,12 +2699,15 @@ class HeaterControlUI(QMainWindow):
             log_dir.mkdir(exist_ok=True)
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             outpath = log_dir / f"openloop_{stamp}.json"
-            with open(outpath, 'w') as f:
-                json.dump({
-                    'pwm_step': self.ol_pwm_step,
-                    'duration_requested': self.ol_duration_s,
-                    'reps': self.ol_reps_data,
-                }, f)
+            with open(outpath, "w") as f:
+                json.dump(
+                    {
+                        "pwm_step": self.ol_pwm_step,
+                        "duration_requested": self.ol_duration_s,
+                        "reps": self.ol_reps_data,
+                    },
+                    f,
+                )
             self.log_message(f"Raw step response saved to {outpath}")
         except Exception as e:
             self.log_message(f"Could not save raw response: {e}")
@@ -2529,7 +2733,7 @@ class HeaterControlUI(QMainWindow):
         rises = []
         baselines = []
         for rep in self.ol_reps_data:
-            samples = rep.get('samples') or []
+            samples = rep.get("samples") or []
             if len(samples) < 5:
                 continue
             t_rep = np.array([s[0] for s in samples])
@@ -2538,14 +2742,16 @@ class HeaterControlUI(QMainWindow):
             grid_in_range = t_grid <= t_max
             if not grid_in_range.any():
                 continue
-            rises.append(np.interp(t_grid[grid_in_range], t_rep, T_rep)
-                         - rep['baseline'])
-            baselines.append(rep['baseline'])
+            rises.append(
+                np.interp(t_grid[grid_in_range], t_rep, T_rep) - rep["baseline"]
+            )
+            baselines.append(rep["baseline"])
 
         if not rises:
             self.log_message(
                 f"Reps contained too few samples to fit ({len(self.ol_reps_data)} "
-                f"rep(s)). Aborting.")
+                f"rep(s)). Aborting."
+            )
             self._stop_openloop()
             return
 
@@ -2556,28 +2762,29 @@ class HeaterControlUI(QMainWindow):
         rise_avg = np.mean(np.vstack([r[:min_len] for r in rises]), axis=0)
         t_arr = t_grid[:min_len]
         T0 = float(np.mean(baselines))
-        T_arr = rise_avg + T0
 
         # First-order-plus-dead-time on the rise:
         #   y(t) = 0                              for t < L
         #   y(t) = dT * (1 - exp(-(t - L)/tau))   for t >= L
         def fopdt_rise(t, dT, tau, L):
             t = np.asarray(t)
-            return np.where(t < L, 0.0,
-                            dT * (1 - np.exp(-(t - L) / tau)))
+            return np.where(t < L, 0.0, dT * (1 - np.exp(-(t - L) / tau)))
 
         try:
             popt, _ = curve_fit(
-                fopdt_rise, t_arr, rise_avg,
+                fopdt_rise,
+                t_arr,
+                rise_avg,
                 p0=[max(rise_avg.max(), 1.0), 100.0, 2.0],
-                bounds=([1.0, 5.0, 0.0], [400.0, 800.0, 60.0]))
+                bounds=([1.0, 5.0, 0.0], [400.0, 800.0, 60.0]),
+            )
         except Exception as e:
             self.log_message(f"FOPDT fit failed: {e}")
             self._stop_openloop()
             return
 
         dT, tau, L = popt
-        K = dT / self.ol_pwm_step                 # °C per %PWM
+        K = dT / self.ol_pwm_step  # °C per %PWM
         T_inf = T0 + dT
         y_fit = fopdt_rise(t_arr, *popt)
         rmse = float(np.sqrt(np.mean((rise_avg - y_fit) ** 2)))
@@ -2605,31 +2812,38 @@ class HeaterControlUI(QMainWindow):
             Td = 0.5 * L
             return Kp, Kp / Ti, Kp * Td
 
-        simc_aggressive   = simc(L)
-        simc_moderate     = simc(2 * L)
+        simc_aggressive = simc(L)
+        simc_moderate = simc(2 * L)
         simc_conservative = simc(3 * L)
-        cc                = cohen_coon()
-        zn                = zn_pid()
+        cc = cohen_coon()
+        zn = zn_pid()
 
         # SIMC moderate (tau_c = 2L) is the default — well-behaved for
         # thermal loops without being too sluggish.
         recommended_kp, recommended_ki, recommended_kd = simc_moderate
 
         self.calibration_results = {
-            'method': 'Open-Loop FOPDT',
-            'kp': recommended_kp,
-            'ki': recommended_ki,
-            'kd': recommended_kd,
-            'simc_aggressive': simc_aggressive,
-            'simc_moderate': simc_moderate,
-            'simc_conservative': simc_conservative,
-            'cohen_coon': cc,
-            'zn_pid': zn,
-            'process': {'T0': T0, 'T_inf': T_inf, 'dT': dT,
-                        'tau': tau, 'L': L, 'K': K, 'rmse': rmse,
-                        'pwm_step': self.ol_pwm_step,
-                        'n_samples': int(len(t_arr)),
-                        'n_reps': int(len(rises))},
+            "method": "Open-Loop FOPDT",
+            "kp": recommended_kp,
+            "ki": recommended_ki,
+            "kd": recommended_kd,
+            "simc_aggressive": simc_aggressive,
+            "simc_moderate": simc_moderate,
+            "simc_conservative": simc_conservative,
+            "cohen_coon": cc,
+            "zn_pid": zn,
+            "process": {
+                "T0": T0,
+                "T_inf": T_inf,
+                "dT": dT,
+                "tau": tau,
+                "L": L,
+                "K": K,
+                "rmse": rmse,
+                "pwm_step": self.ol_pwm_step,
+                "n_samples": int(len(t_arr)),
+                "n_reps": int(len(rises)),
+            },
         }
 
         self.display_calibration_results()
@@ -2683,19 +2897,38 @@ class HeaterControlUI(QMainWindow):
         results_text = f"Calibration Results ({self.calibration_results['method']}):\n"
         results_text += "=" * 50 + "\n"
 
-        if self.calibration_results['method'] == 'Ziegler-Nichols':
+        if self.calibration_results["method"] == "Ziegler-Nichols":
             # Enhanced Ziegler-Nichols display
-            results_text += f"Critical Gain (Ku): {self.oscillation_stats['critical_gain']:.3f}\n"
-            results_text += f"Critical Period (Pu): {self.oscillation_stats['oscillation_period']:.2f}s\n"
-            results_text += f"Oscillation Amplitude: {self.oscillation_stats['oscillation_amplitude']:.3f}°C\n"
-            results_text += f"Peaks/Valleys: {self.oscillation_stats['num_peaks']}/{self.oscillation_stats['num_valleys']}\n"
-            results_text += f"Temperature Range: {self.oscillation_stats['temperature_range']:.2f}°C\n"
-            results_text += f"Stability (±1σ): {self.oscillation_stats['stability_std']:.3f}°C\n"
-            results_text += f"Detection: {'Auto-detected' if self.oscillation_stats['oscillation_detected'] else 'Manual analysis'}\n"
+            results_text += (
+                f"Critical Gain (Ku): {self.oscillation_stats['critical_gain']:.3f}\n"
+            )
+            results_text += (
+                f"Critical Period (Pu): "
+                f"{self.oscillation_stats['oscillation_period']:.2f}s\n"
+            )
+            results_text += (
+                f"Oscillation Amplitude: "
+                f"{self.oscillation_stats['oscillation_amplitude']:.3f}°C\n"
+            )
+            results_text += (
+                f"Peaks/Valleys: {self.oscillation_stats['num_peaks']}/"
+                f"{self.oscillation_stats['num_valleys']}\n"
+            )
+            results_text += (
+                f"Temperature Range: "
+                f"{self.oscillation_stats['temperature_range']:.2f}°C\n"
+            )
+            results_text += (
+                f"Stability (±1σ): {self.oscillation_stats['stability_std']:.3f}°C\n"
+            )
+            detected = self.oscillation_stats["oscillation_detected"]
+            results_text += (
+                f"Detection: {'Auto-detected' if detected else 'Manual analysis'}\n"
+            )
             results_text += "\n"
 
             # Show all controller types
-            if self.calibration_results.get('method', False):
+            if self.calibration_results.get("method", False):
                 results_text += "RECOMMENDED PID PARAMETERS:\n"
                 results_text += "-" * 30 + "\n"
                 results_text += "Standard PID Parameters:\n"
@@ -2705,32 +2938,50 @@ class HeaterControlUI(QMainWindow):
                 if self.calibration_results["method"] == "Ziegler-Nichols":
                     results_text += "\n"
                     results_text += "No Overshoot PID Parameters:\n"
-                    results_text += f"Kp: {self.calibration_results['kp_no_overshoot']:.3f}\n"
-                    results_text += f"Ki: {self.calibration_results['ki_no_overshoot']:.3f}\n"
-                    results_text += f"Kd: {self.calibration_results['kd_no_overshoot']:.3f}\n"
+                    results_text += (
+                        f"Kp: {self.calibration_results['kp_no_overshoot']:.3f}\n"
+                    )
+                    results_text += (
+                        f"Ki: {self.calibration_results['ki_no_overshoot']:.3f}\n"
+                    )
+                    results_text += (
+                        f"Kd: {self.calibration_results['kd_no_overshoot']:.3f}\n"
+                    )
                     results_text += "\n"
                     results_text += "Aggressive PID Parameters:\n"
-                    results_text += f"Kp: {self.calibration_results['kp_aggressive']:.3f}\n"
-                    results_text += f"Ki: {self.calibration_results['ki_aggressive']:.3f}\n"
-                    results_text += f"Kd: {self.calibration_results['kd_aggressive']:.3f}\n"
+                    results_text += (
+                        f"Kp: {self.calibration_results['kp_aggressive']:.3f}\n"
+                    )
+                    results_text += (
+                        f"Ki: {self.calibration_results['ki_aggressive']:.3f}\n"
+                    )
+                    results_text += (
+                        f"Kd: {self.calibration_results['kd_aggressive']:.3f}\n"
+                    )
 
-        elif self.calibration_results['method'] == 'Open-Loop FOPDT':
+        elif self.calibration_results["method"] == "Open-Loop FOPDT":
             r = self.calibration_results
-            p = r['process']
+            p = r["process"]
             results_text += "Process Model (FOPDT):\n"
             results_text += f"  Baseline T0   = {p['T0']:.2f} °C\n"
-            results_text += f"  Asymptote T∞  = {p['T_inf']:.2f} °C  (Δ = {p['dT']:.2f} °C @ {p['pwm_step']}% PWM)\n"
+            results_text += (
+                f"  Asymptote T∞  = {p['T_inf']:.2f} °C  "
+                f"(Δ = {p['dT']:.2f} °C @ {p['pwm_step']}% PWM)\n"
+            )
             results_text += f"  Time const τ  = {p['tau']:.2f} s\n"
             results_text += f"  Dead time L   = {p['L']:.2f} s\n"
             results_text += f"  Process gain  = {p['K']:.4f} °C / %PWM\n"
             results_text += (
                 f"  Fit RMSE      = {p['rmse']:.3f} °C  "
                 f"({p['n_samples']} samples avg of "
-                f"{p.get('n_reps', 1)} rep)\n\n")
+                f"{p.get('n_reps', 1)} rep)\n\n"
+            )
             results_text += "Recommended PID gains   (kp,    ki,     kd):\n"
             results_text += "-" * 50 + "\n"
+
             def fmt(t):
                 return f"({t[0]:7.3f}, {t[1]:7.4f}, {t[2]:7.3f})"
+
             results_text += f"  SIMC aggressive    {fmt(r['simc_aggressive'])}\n"
             results_text += f"  SIMC moderate ★    {fmt(r['simc_moderate'])}\n"
             results_text += f"  SIMC conservative  {fmt(r['simc_conservative'])}\n"
@@ -2755,9 +3006,9 @@ class HeaterControlUI(QMainWindow):
             return
 
         try:
-            kp = self.calibration_results['kp']
-            ki = self.calibration_results['ki']
-            kd = self.calibration_results['kd']
+            kp = self.calibration_results["kp"]
+            ki = self.calibration_results["ki"]
+            kd = self.calibration_results["kd"]
 
             # Update the PID parameter spin boxes
             self.kp_spin.setValue(kp)
@@ -2770,30 +3021,34 @@ class HeaterControlUI(QMainWindow):
             self.current_kd = kd
 
             # Update display
-            self.current_pid_label.setText(f"Current PID: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}")
+            self.current_pid_label.setText(
+                f"Current PID: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}"
+            )
 
             # Send PID parameters to firmware
             # Format: pid_<heater_name>><kp>_<ki>_<kd>
             cmd = self.get_heater_cmd(f"pid_{{heater}}>{kp}_{ki}_{kd}")
             self.send_cmd_with_log(cmd)
 
-            self.log_message(f"Applied PID parameters: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}")
+            self.log_message(
+                f"Applied PID parameters: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}"
+            )
             self.calib_apply_btn.setEnabled(False)
 
             # Update the PID button to reflect that PID is now configured
             self.pid_toggle_btn.setChecked(True)
             self.pid_toggle_btn.setText("Stop PID Control")
             self.pid_toggle_btn.setStyleSheet("""
-                QPushButton { 
-                    background-color: #f44336; 
+                QPushButton {
+                    background-color: #f44336;
                     color: white;
                     font-weight: bold;
                 }
-                QPushButton:hover { 
-                    background-color: #d32f2f; 
+                QPushButton:hover {
+                    background-color: #d32f2f;
                 }
-                QPushButton:pressed { 
-                    background-color: #b71c1c; 
+                QPushButton:pressed {
+                    background-color: #b71c1c;
                 }
             """)
 
@@ -2803,36 +3058,43 @@ class HeaterControlUI(QMainWindow):
     def analyze_kp_test_data(self, kp_value):
         """Analyze data from a specific Kp test to detect oscillations"""
         try:
-            if not self.zn_calibration_params['test_data']:
+            if not self.zn_calibration_params["test_data"]:
                 return False, 0, 0
 
-            test_data = self.zn_calibration_params['test_data']
+            test_data = self.zn_calibration_params["test_data"]
             if len(test_data) < 20:  # Need sufficient data
                 self.log_message(f"Insufficient data for Kp={kp_value} analysis")
                 return False, 0, 0
 
             # Extract temperature data
-            temps = np.array([d['temperature'] for d in test_data if d['temperature'] is not None])
-            timestamps = np.array([d['timestamp'] for d in test_data if d['temperature'] is not None])
+            temps = np.array(
+                [d["temperature"] for d in test_data if d["temperature"] is not None]
+            )
+            timestamps = np.array(
+                [d["timestamp"] for d in test_data if d["temperature"] is not None]
+            )
 
             if len(temps) < 20:
-                self.log_message(f"Insufficient valid temperature data for Kp={kp_value} analysis")
+                self.log_message(
+                    f"Insufficient valid temperature data for Kp={kp_value} analysis"
+                )
                 return False, 0, 0
 
             # Detect oscillations using scipy
-            oscillation_detected = self.detect_oscillations(temps,
-                                                            timestamps)
+            oscillation_detected = self.detect_oscillations(temps, timestamps)
 
             if oscillation_detected:
                 if self.oscillation_stats is not None:
-                    self.oscillation_stats['critical_gain'] = kp_value
-                    amplitude = self.oscillation_stats['oscillation_amplitude']
-                    period = self.oscillation_stats['oscillation_period']
-                    self.log_message(f"Oscillation detected at Kp={kp_value}, "
-                                     f"Amplitude={amplitude:.2f}°C, Period={period:.1f}s")
+                    self.oscillation_stats["critical_gain"] = kp_value
+                    amplitude = self.oscillation_stats["oscillation_amplitude"]
+                    period = self.oscillation_stats["oscillation_period"]
+                    self.log_message(
+                        f"Oscillation detected at Kp={kp_value}, "
+                        f"Amplitude={amplitude:.2f}°C, Period={period:.1f}s"
+                    )
 
                     kp = kp_value * 0.6
-                    ki = 1.2 *  kp_value / period
+                    ki = 1.2 * kp_value / period
                     kd = 0.075 * kp_value * period
 
                     kp_no_overshoot = 0.2 * kp_value
@@ -2843,16 +3105,18 @@ class HeaterControlUI(QMainWindow):
                     ki_aggressive = 1.75 * kp_value / period
                     kd_aggressive = 0.105 * kp_value * period
 
-                    self.calibration_results = {'method': 'Ziegler-Nichols',
-                                                'kp': kp,
-                                                'ki': ki,
-                                                'kd': kd,
-                                                'kp_no_overshoot': kp_no_overshoot,
-                                                'ki_no_overshoot': ki_no_overshoot,
-                                                'kd_no_overshoot': kd_no_overshoot,
-                                                'kp_aggressive': kp_aggressive,
-                                                'ki_aggressive': ki_aggressive,
-                                                'kd_aggressive': kd_aggressive}
+                    self.calibration_results = {
+                        "method": "Ziegler-Nichols",
+                        "kp": kp,
+                        "ki": ki,
+                        "kd": kd,
+                        "kp_no_overshoot": kp_no_overshoot,
+                        "ki_no_overshoot": ki_no_overshoot,
+                        "kd_no_overshoot": kd_no_overshoot,
+                        "kp_aggressive": kp_aggressive,
+                        "ki_aggressive": ki_aggressive,
+                        "kd_aggressive": kd_aggressive,
+                    }
                     return True
             else:
                 self.log_message(f"No oscillation detected at Kp={kp_value}")
@@ -2863,7 +3127,7 @@ class HeaterControlUI(QMainWindow):
             return False
 
     def _find_peaks_valleys(self, data, **kwargs):
-        """Find peaks and valleys in temperature data"""        # Find peaks (local maxima)
+        """Find peaks and valleys in temperature data"""  # Find peaks (local maxima)
         peaks, _ = find_peaks(data, **kwargs)
 
         # Find valleys (local minima)
@@ -2875,31 +3139,34 @@ class HeaterControlUI(QMainWindow):
         """Apply Butterworth low-pass filter."""
         nyquist = 0.5 * sampling_rate
         normal_cutoff = cutoff_freq / nyquist
-        b, a = butter(order, normal_cutoff, btype='low', analog=False)
+        b, a = butter(order, normal_cutoff, btype="low", analog=False)
         return filtfilt(b, a, data)
 
-    def detect_oscillations(self, temperatures, timestamps,
-                            min_amplitude=1, min_period=10):
+    def detect_oscillations(
+        self, temperatures, timestamps, min_amplitude=1, min_period=10
+    ):
         """Detect oscillations in temperature data using scipy"""
         temps = np.array(temperatures)
         # Calculate sampling rate
         sampling_rate = len(timestamps) / (timestamps[-1] - timestamps[0])
         # Apply Butterworth 0.5Hz filter to smooth the data
-        temps_filtered = self.low_pass_filter(temps, cutoff_freq=0.5,
-                                              sampling_rate=sampling_rate,
-                                              order=4)
+        temps_filtered = self.low_pass_filter(
+            temps, cutoff_freq=0.5, sampling_rate=sampling_rate, order=4
+        )
 
         # save data to a csv for validation
-        df = pd.DataFrame({'timestamps': timestamps, 'temperatures': temps})
-        dir_path = Path('calib_temp_data')
+        df = pd.DataFrame({"timestamps": timestamps, "temperatures": temps})
+        dir_path = Path("calib_temp_data")
         dir_path.mkdir(parents=True, exist_ok=True)
-        filename = f'temperatures{self.zn_temp_spin.value()}_{self.current_kp}.csv'
+        filename = f"temperatures{self.zn_temp_spin.value()}_{self.current_kp}.csv"
         df.to_csv(dir_path / filename, index=False)
 
         try:
-            peaks, valleys = self._find_peaks_valleys(temps_filtered,
-                                                      distance=5,  # Minimum distance between peaks
-                                                      prominence=0.1)  # Minimum prominence
+            peaks, valleys = self._find_peaks_valleys(
+                temps_filtered,
+                distance=5,  # Minimum distance between peaks
+                prominence=0.1,
+            )  # Minimum prominence
 
             if len(peaks) < 3 or len(valleys) < 3:
                 return False, 0, 0
@@ -2930,18 +3197,19 @@ class HeaterControlUI(QMainWindow):
                 recent_valleys = valley_temps[-4:]
                 recent_amplitude = (np.mean(recent_peaks) - np.mean(recent_valleys)) / 2
 
-                # Oscillation is sustained if recent amplitude is similar to overall amplitude
+                # Oscillation is sustained if recent amplitude is similar to
+                # overall amplitude
                 if recent_amplitude < amplitude * 0.7:
                     return False
 
             self.oscillation_stats = {
-                'oscillation_detected': True,
-                'oscillation_amplitude': amplitude,
-                'oscillation_period': period,
-                'num_peaks': len(peaks),
-                'num_valleys': len(valleys),
-                'temperature_range': np.max(temps) - np.min(temps),
-                'stability_std': np.std(temps)
+                "oscillation_detected": True,
+                "oscillation_amplitude": amplitude,
+                "oscillation_period": period,
+                "num_peaks": len(peaks),
+                "num_valleys": len(valleys),
+                "temperature_range": np.max(temps) - np.min(temps),
+                "stability_std": np.std(temps),
             }
 
             return True
@@ -2949,7 +3217,9 @@ class HeaterControlUI(QMainWindow):
         except ImportError:
             # Fallback if scipy is not available
             self.log_message("scipy not available, using simple oscillation detection")
-            return self.simple_oscillation_detection(temperatures, timestamps, min_amplitude, min_period)
+            return self.simple_oscillation_detection(
+                temperatures, timestamps, min_amplitude, min_period
+            )
         except Exception as e:
             self.log_message(f"Error in oscillation detection: {e}")
             return False, 0, 0
@@ -2969,14 +3239,13 @@ class HeaterControlUI(QMainWindow):
                 for port in ports:
                     # Display port name with description
                     port_display = f"{port.device}"
-                    if port.description and port.description != 'n/a':
+                    if port.description and port.description != "n/a":
                         port_display += f" - {port.description}"
                     self.port_combo.addItem(port_display, port.device)
 
                 # Try to restore previous selection
                 if current_port:
-                    index = self.port_combo.findText(
-                        current_port, Qt.MatchStartsWith)
+                    index = self.port_combo.findText(current_port, Qt.MatchStartsWith)
                     if index >= 0:
                         self.port_combo.setCurrentIndex(index)
 
@@ -3013,12 +3282,10 @@ class HeaterControlUI(QMainWindow):
             if success:
                 self.log_message("Connected successfully!")
                 self.connection_status.setText("Connected")
-                self.connection_status.setStyleSheet(
-                    "color: green; font-weight: bold;")
+                self.connection_status.setStyleSheet("color: green; font-weight: bold;")
                 self.connect_btn.setEnabled(False)
                 self.disconnect_btn.setEnabled(True)
-                self.status_bar.showMessage(
-                    f"Connected via USB to {selected_port}")
+                self.status_bar.showMessage(f"Connected via USB to {selected_port}")
             else:
                 self.log_message("Connection failed!")
                 self.connect_btn.setEnabled(True)
@@ -3109,21 +3376,21 @@ class HeaterControlUI(QMainWindow):
         """Route telemetry by frame header. controller.py tags each frame
         with `_frame` set to the prefix that followed the '§' marker
         (TEMP, PID_<HEATER>, INFO, ERR, WHOAMI, etc.)."""
-        frame = data.get('_frame', '') if isinstance(data, dict) else ''
-        if frame == 'WHOAMI':
+        frame = data.get("_frame", "") if isinstance(data, dict) else ""
+        if frame == "WHOAMI":
             self._on_whoami_frame(data)
             return
-        if frame == 'INFO':
+        if frame == "INFO":
             self._on_info_frame(data)
             return
-        if frame == 'ERR':
+        if frame == "ERR":
             self._on_err_frame(data)
             return
 
         # If an open-loop calibration is in flight, feed its state
         # machine before (or instead of) the normal plotting path. The
         # plot is still updated below so the user sees the live curve.
-        if self.calibration_active and self.calibration_method == 'open_loop':
+        if self.calibration_active and self.calibration_method == "open_loop":
             self._on_openloop_telemetry(data, frame)
 
         # Otherwise treat as TEMP / PID_<HEATER> telemetry.
@@ -3132,9 +3399,9 @@ class HeaterControlUI(QMainWindow):
     def _on_whoami_frame(self, data):
         """Display board identity in the connection group + window title."""
         self.board_info = {
-            'uid': data.get('uid'),
-            'device_id': data.get('device_id'),
-            'bluetooth_name': data.get('bluetooth_name'),
+            "uid": data.get("uid"),
+            "device_id": data.get("device_id"),
+            "bluetooth_name": data.get("bluetooth_name"),
         }
         label = self._format_board_identity(self.board_info)
         self.board_id_label.setText(f"Board: {label}")
@@ -3143,14 +3410,13 @@ class HeaterControlUI(QMainWindow):
 
     def _on_info_frame(self, data):
         """Surface structured §INFO events into the log + reactive UI bits."""
-        event = data.get('event', '?')
-        if event == 'pid_saved':
-            kp, ki, kd = data.get('kp'), data.get('ki'), data.get('kd')
-            self.log_message(
-                f"PID saved to board flash: Kp={kp}, Ki={ki}, Kd={kd}")
+        event = data.get("event", "?")
+        if event == "pid_saved":
+            kp, ki, kd = data.get("kp"), data.get("ki"), data.get("kd")
+            self.log_message(f"PID saved to board flash: Kp={kp}, Ki={ki}, Kd={kd}")
             self.status_bar.showMessage("PID tunings saved to board.", 5000)
             return
-        if event == 'pid_started':
+        if event == "pid_started":
             self.pid_active = True
             self.pid_enabled = True
             if not self.stream_active:
@@ -3158,7 +3424,7 @@ class HeaterControlUI(QMainWindow):
             if not self.pid_toggle_btn.isChecked():
                 self.pid_toggle_btn.setChecked(True)
             return
-        if event == 'pid_stopped':
+        if event == "pid_stopped":
             self.pid_active = False
             self.pid_enabled = False
             # Don't touch stream_active here. pid_stopped means the
@@ -3173,19 +3439,18 @@ class HeaterControlUI(QMainWindow):
                 self.pid_toggle_btn.setChecked(False)
             return
         # Anything else: log compactly.
-        compact = {k: v for k, v in data.items() if not k.startswith('_')}
+        compact = {k: v for k, v in data.items() if not k.startswith("_")}
         self.log_message(f"§INFO {event}: {compact}")
 
     def _on_err_frame(self, data):
-        kind = data.get('kind', '?')
-        heater = data.get('heater', '?')
-        msg = data.get('message', '')
+        kind = data.get("kind", "?")
+        heater = data.get("heater", "?")
+        msg = data.get("message", "")
         self.log_message(f"§ERR [{kind}] on {heater}: {msg}")
-        self.status_bar.showMessage(
-            f"Board error ({heater}, {kind}): {msg}", 10000)
+        self.status_bar.showMessage(f"Board error ({heater}, {kind}): {msg}", 10000)
         # An overtemp/task_crash for the active heater stops PID streaming
         # on the board side; reflect that in the UI.
-        if kind in ('overtemp', 'task_crash', 'sensor_fail'):
+        if kind in ("overtemp", "task_crash", "sensor_fail"):
             self.pid_active = False
             if self.stream_active:
                 self.set_stream_active(False)
@@ -3195,9 +3460,9 @@ class HeaterControlUI(QMainWindow):
     @staticmethod
     def _format_board_identity(info):
         parts = []
-        if info.get('device_id'):
-            parts.append(str(info['device_id']))
-        uid = info.get('uid')
+        if info.get("device_id"):
+            parts.append(str(info["device_id"]))
+        uid = info.get("uid")
         if uid:
             short = uid if len(uid) <= 10 else f"{uid[:8]}…"
             parts.append(f"uid:{short}")
@@ -3207,18 +3472,19 @@ class HeaterControlUI(QMainWindow):
         """Handle telemetry data from board"""
         try:
             # Extract temperature data
-            current = data.get('current', 0)
-            temperatures_dict = data.get('temperatures', {})
-            pid_temp = data.get('pid_temperature', -50)
+            current = data.get("current", 0)
+            temperatures_dict = data.get("temperatures", {})
+            pid_temp = data.get("pid_temperature", -50)
 
             if self.pid_enabled:
-                # PID stream provides pwm_percentage for TEC1 (TEC1 and TEC2 are dependent)
-                heater1_pwm = data.get('pwm_percentage', 0)
+                # PID stream provides pwm_percentage for TEC1 (TEC1 and TEC2
+                # are dependent)
+                heater1_pwm = data.get("pwm_percentage", 0)
                 heater2_pwm = heater1_pwm  # TEC1 and TEC2 are dependent
             else:
-                heater1_pwm = data.get('pwm_tec1', self.pwm_value)
-                heater2_pwm = data.get('pwm_tec2', self.pwm_value)
-            timestamp = data.get('timestamp', 0)
+                heater1_pwm = data.get("pwm_tec1", self.pwm_value)
+                heater2_pwm = data.get("pwm_tec2", self.pwm_value)
+            timestamp = data.get("timestamp", 0)
             if timestamp < self.last_timestamp:
                 timestamp += self.last_timestamp
             self.last_timestamp = timestamp
@@ -3243,7 +3509,9 @@ class HeaterControlUI(QMainWindow):
                         self.sensor_labels_layout.addWidget(label)
                     else:
                         # Update existing label
-                        self.sensor_labels[sensor_name].setText(f"{sensor_name}: {temp_value:.1f}°C")
+                        self.sensor_labels[sensor_name].setText(
+                            f"{sensor_name}: {temp_value:.1f}°C"
+                        )
                 else:
                     # Mark sensor as invalid
                     if sensor_name in self.sensor_labels:
@@ -3270,45 +3538,53 @@ class HeaterControlUI(QMainWindow):
                 else:
                     setpoint = None
 
-
             # Add data to plot (pass all sensors as dict)
             self.plot_widget.add_data_point(
-                timestamp, valid_temperatures, pid_temp,
-                heater1_pwm, heater2_pwm, setpoint
+                timestamp,
+                valid_temperatures,
+                pid_temp,
+                heater1_pwm,
+                heater2_pwm,
+                setpoint,
             )
 
             # Capture calibration data if calibration is active
             if self.calibration_active:
-                self.calibration_data['timestamps'].append(timestamp)
-                self.calibration_data['temperatures'].append(pid_temp)  # Use PID temp for calibration
-                self.calibration_data['pwm_values'].append(heater1_pwm)
-                self.calibration_data['setpoints'].append(self.current_setpoint)
+                self.calibration_data["timestamps"].append(timestamp)
+                self.calibration_data["temperatures"].append(
+                    pid_temp
+                )  # Use PID temp for calibration
+                self.calibration_data["pwm_values"].append(heater1_pwm)
+                self.calibration_data["setpoints"].append(self.current_setpoint)
 
                 # Store data for current Kp test (Ziegler-Nichols only)
                 # Only collect data during testing phase (after setpoint reached)
-                if (self.calibration_method == "ziegler_nichols" and
-                    self.zn_calibration_params.get('phase', None) == 'testing' and
-                    self.zn_calibration_params.get('setpoint_reached', False)):
-
+                if (
+                    self.calibration_method == "ziegler_nichols"
+                    and self.zn_calibration_params.get("phase", None) == "testing"
+                    and self.zn_calibration_params.get("setpoint_reached", False)
+                ):
                     # Add data to current test
-                    self.zn_calibration_params['test_data'].append({
-                        'timestamp': timestamp,
-                        'temperature': pid_temp if pid_temp else None,
-                        'pwm': heater1_pwm,
-                        'setpoint': self.current_setpoint
-                    })
+                    self.zn_calibration_params["test_data"].append(
+                        {
+                            "timestamp": timestamp,
+                            "temperature": pid_temp if pid_temp else None,
+                            "pwm": heater1_pwm,
+                            "setpoint": self.current_setpoint,
+                        }
+                    )
 
             # Log data if logging is enabled
             if self.is_logging:
                 log_data = {
-                    'temperatures': valid_temperatures,
-                    'dt': timestamp,
-                    'current': current,
-                    'pid_temp': pid_temp,
-                    'heater1_pwm': heater1_pwm,
-                    'heater2_pwm': heater2_pwm,
-                    'pid_enabled': self.pid_enabled,
-                    'setpoint': setpoint
+                    "temperatures": valid_temperatures,
+                    "dt": timestamp,
+                    "current": current,
+                    "pid_temp": pid_temp,
+                    "heater1_pwm": heater1_pwm,
+                    "heater2_pwm": heater2_pwm,
+                    "pid_enabled": self.pid_enabled,
+                    "setpoint": setpoint,
                 }
                 self.data_logger.log_data(log_data)
 
@@ -3336,14 +3612,18 @@ class HeaterControlUI(QMainWindow):
         """Handle compensation changes"""
         self.compensation_rate = self.compensation_rate_spin.value()
         self.compensation_offset = self.compensation_offset_spin.value()
-        self.config['heater_control']['compensation_rate'] = self.compensation_rate
-        self.config['heater_control']['compensation_offset'] = self.compensation_offset
+        self.config["heater_control"]["compensation_rate"] = self.compensation_rate
+        self.config["heater_control"]["compensation_offset"] = self.compensation_offset
 
         # Write to file
         with open("config.yml", "w") as outfile:
             yaml.dump(self.config, outfile, default_flow_style=False)
 
-        self.log_message(f"Temperature compensation changed to {self.compensation_rate:.2f}x temperature and {self.compensation_offset:.2f}°C offset")
+        self.log_message(
+            f"Temperature compensation changed to "
+            f"{self.compensation_rate:.2f}x temperature and "
+            f"{self.compensation_offset:.2f}°C offset"
+        )
 
     def start_stream(self):
         """Start temperature streaming with current settings"""
@@ -3365,18 +3645,27 @@ class HeaterControlUI(QMainWindow):
             # Check PID checkbox state to determine which command to send
             if self.pid_toggle_btn.isChecked():
                 # Start PID control with selected sensor group
-                setpoint = round((self.setpoint_spin.value() * self.compensation_rate) + self.compensation_offset, 2)
+                setpoint = round(
+                    (self.setpoint_spin.value() * self.compensation_rate)
+                    + self.compensation_offset,
+                    2,
+                )
                 self.current_setpoint = setpoint
 
                 if sensor_group == "None":
                     cmd = self.get_heater_cmd(f"pid_{{heater}}_{setpoint}")
                 else:
-                    cmd = self.get_heater_cmd(f"pid_{{heater}}_{setpoint}_{sensor_group}")
+                    cmd = self.get_heater_cmd(
+                        f"pid_{{heater}}_{setpoint}_{sensor_group}"
+                    )
 
                 self.send_cmd_with_log(cmd)
                 self.pid_active = True
                 self.pid_enabled = True
-                self.log_message(f"Started PID control at {setpoint}°C with sensor group '{sensor_group}'")
+                self.log_message(
+                    f"Started PID control at {setpoint}°C with sensor group "
+                    f"'{sensor_group}'"
+                )
             else:
                 # Start temperature streaming only
                 if sensor_group == "None":
@@ -3387,7 +3676,9 @@ class HeaterControlUI(QMainWindow):
                 self.send_cmd_with_log(cmd)
                 self.pid_active = False
                 self.pid_enabled = False
-                self.log_message(f"Started temperature streaming for sensor group '{sensor_group}'")
+                self.log_message(
+                    f"Started temperature streaming for sensor group '{sensor_group}'"
+                )
 
             # Update button state
             self.set_stream_active(True)
@@ -3426,31 +3717,31 @@ class HeaterControlUI(QMainWindow):
         if active:
             self.stream_toggle_btn.setText("Stop Stream")
             self.stream_toggle_btn.setStyleSheet("""
-                QPushButton { 
-                    background-color: #f44336; 
+                QPushButton {
+                    background-color: #f44336;
                     color: white;
                     font-weight: bold;
                 }
-                QPushButton:hover { 
-                    background-color: #d32f2f; 
+                QPushButton:hover {
+                    background-color: #d32f2f;
                 }
-                QPushButton:pressed { 
-                    background-color: #b71c1c; 
+                QPushButton:pressed {
+                    background-color: #b71c1c;
                 }
             """)
         else:
             self.stream_toggle_btn.setText("Start Stream")
             self.stream_toggle_btn.setStyleSheet("""
-                QPushButton { 
-                    background-color: #4CAF50; 
+                QPushButton {
+                    background-color: #4CAF50;
                     color: white;
                     font-weight: bold;
                 }
-                QPushButton:hover { 
-                    background-color: #45a049; 
+                QPushButton:hover {
+                    background-color: #45a049;
                 }
-                QPushButton:pressed { 
-                    background-color: #3d8b40; 
+                QPushButton:pressed {
+                    background-color: #3d8b40;
             }
             """)
 
@@ -3492,21 +3783,26 @@ class HeaterControlUI(QMainWindow):
             self.current_kd = kd
 
             # Update display
-            self.current_pid_label.setText(f"Current PID: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}")
+            self.current_pid_label.setText(
+                f"Current PID: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}"
+            )
 
             # Send PID parameters to firmware
             # Format: pid_<heater_name>><kp>_<ki>_<kd>
             cmd = self.get_heater_cmd(f"pid_{{heater}}>{kp}_{ki}_{kd}")
             self.send_cmd_with_log(cmd)
 
-            self.log_message(f"Applied PID parameters: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}")
+            self.log_message(
+                f"Applied PID parameters: Kp={kp:.2f}, Ki={ki:.2f}, Kd={kd:.2f}"
+            )
             self.log_message(f"Sent command: {cmd}")
 
             # Query the values back to confirm they were set correctly
             sleep(PID_QUERY_DELAY)  # Give the board time to process
             self.query_pid_values()
 
-            # The pid_<heater_name>><kp>_<ki>_<kd> command automatically starts PID control
+            # The pid_<heater_name>><kp>_<ki>_<kd> command automatically
+            # starts PID control
             # No need to restart PID separately
 
         except Exception as e:
@@ -3514,7 +3810,10 @@ class HeaterControlUI(QMainWindow):
 
     def update_pid_display(self):
         """Update the current PID display"""
-        self.current_pid_label.setText(f"Current PID: Kp={self.current_kp:.2f}, Ki={self.current_ki:.2f}, Kd={self.current_kd:.2f}")
+        self.current_pid_label.setText(
+            f"Current PID: Kp={self.current_kp:.2f}, "
+            f"Ki={self.current_ki:.2f}, Kd={self.current_kd:.2f}"
+        )
 
     def query_available_heaters(self):
         """Query available heaters from the board"""
@@ -3548,8 +3847,8 @@ class HeaterControlUI(QMainWindow):
         cmd = f"save_pid_{self.current_heater}"
         self.send_cmd_with_log(cmd)
         self.log_message(
-            f"Requested save of PID tunings for {self.current_heater} to "
-            f"board flash...")
+            f"Requested save of PID tunings for {self.current_heater} to board flash..."
+        )
 
     @Slot()
     def identify_boards(self):
@@ -3558,24 +3857,25 @@ class HeaterControlUI(QMainWindow):
         self.identify_ports_btn.setEnabled(False)
         self.log_message("Identifying boards on serial ports...")
         connected_port = (
-            getattr(self.board, 'port', None) if (self.board and self.board.connected)
-            else None)
+            getattr(self.board, "port", None)
+            if (self.board and self.board.connected)
+            else None
+        )
         cached_info = dict(self.board_info) if self.board_info else None
 
         def worker():
             results = {}
             for port_info in Board.list_serial_ports_filtered():
                 port = port_info.device
-                desc = getattr(port_info, 'description', '') or ''
+                desc = getattr(port_info, "description", "") or ""
                 if port == connected_port and cached_info:
                     # Reuse the identity we already have for the connected
                     # board rather than fighting with the open serial port.
-                    results[port] = {'info': cached_info,
-                                     'description': desc}
+                    results[port] = {"info": cached_info, "description": desc}
                     continue
                 results[port] = {
-                    'info': self._probe_whoami_on_port(port),
-                    'description': desc,
+                    "info": self._probe_whoami_on_port(port),
+                    "description": desc,
                 }
             self.identify_results_signal.emit(results)
 
@@ -3585,8 +3885,7 @@ class HeaterControlUI(QMainWindow):
         """Open `port` briefly, send 'whoami\\n', and parse §WHOAMI{}.
         Returns an empty dict if anything fails."""
         try:
-            ser = pyserial.Serial(port, 115200, timeout=2,
-                                  writeTimeout=2)
+            ser = pyserial.Serial(port, 115200, timeout=2, writeTimeout=2)
         except Exception as e:
             self.logger.debug(f"Identify: cannot open {port}: {e}")
             return {}
@@ -3596,7 +3895,7 @@ class HeaterControlUI(QMainWindow):
             ser.flush()
             # Give the firmware time to run the command and reply.
             time.sleep(0.7)
-            data = ser.read_all().decode(errors='replace')
+            data = ser.read_all().decode(errors="replace")
         except Exception as e:
             self.logger.debug(f"Identify: read failed on {port}: {e}")
             data = ""
@@ -3608,8 +3907,8 @@ class HeaterControlUI(QMainWindow):
 
         for line in data.splitlines():
             line = line.strip()
-            if line.startswith('§WHOAMI'):
-                j = line.find('{')
+            if line.startswith("§WHOAMI"):
+                j = line.find("{")
                 if j >= 0:
                     try:
                         return json.loads(line[j:])
@@ -3625,8 +3924,8 @@ class HeaterControlUI(QMainWindow):
 
         self.port_combo.clear()
         for port, info_dict in results.items():
-            info = info_dict.get('info') or {}
-            desc = info_dict.get('description') or ''
+            info = info_dict.get("info") or {}
+            desc = info_dict.get("description") or ""
             identity = self._format_board_identity(info)
             if identity != "(unknown)":
                 label = f"{identity} — {port}"
@@ -3643,17 +3942,18 @@ class HeaterControlUI(QMainWindow):
                 self.port_combo.setCurrentIndex(idx)
 
         self.identify_ports_btn.setEnabled(True)
-        identified = sum(1 for r in results.values() if r.get('info'))
+        identified = sum(1 for r in results.values() if r.get("info"))
         self.log_message(
-            f"Identified {identified}/{len(results)} board(s) on serial ports.")
+            f"Identified {identified}/{len(results)} board(s) on serial ports."
+        )
 
     def parse_available_heaters(self, message):
         """Parse available heaters response from board"""
         try:
             # Expected format: "{'tec': ['tec1'], 'resistive': ['heater1']}"
             # or JSON format from telemetry
-            if 'available heaters' in message.lower():
-                heaters_dict = json.loads(message[message.find("{"):])
+            if "available heaters" in message.lower():
+                heaters_dict = json.loads(message[message.find("{") :])
             else:
                 return False
 
@@ -3665,7 +3965,9 @@ class HeaterControlUI(QMainWindow):
             for heater_type, heater_list in heaters_dict.items():
                 for heater_name in heater_list:
                     display_name = f"{heater_name} ({heater_type})"
-                    self.heater_combo_selection.addItem(display_name, (heater_name, heater_type))
+                    self.heater_combo_selection.addItem(
+                        display_name, (heater_name, heater_type)
+                    )
 
             # Select first heater by default
             if self.heater_combo_selection.count() > 0:
@@ -3688,7 +3990,10 @@ class HeaterControlUI(QMainWindow):
             if heater_data:
                 self.current_heater = heater_data[0]
                 self.current_heater_type = heater_data[1]
-                self.log_message(f"Heater changed to: {self.current_heater} ({self.current_heater_type})")
+                self.log_message(
+                    f"Heater changed to: {self.current_heater} "
+                    f"({self.current_heater_type})"
+                )
 
                 # Update heater PWM label
                 self.heater1_pwm_label.setText(f"{self.current_heater} PWM: --%")
@@ -3708,7 +4013,9 @@ class HeaterControlUI(QMainWindow):
             # Query PID tunings from firmware for current heater
             cmd = f"pid_{self.current_heater}_tunings"
             self.send_cmd_with_log(cmd)
-            self.log_message(f"Querying current PID values for {self.current_heater}...")
+            self.log_message(
+                f"Querying current PID values for {self.current_heater}..."
+            )
         except Exception as e:
             self.log_message(f"Error querying PID values: {e}")
 
@@ -3759,7 +4066,11 @@ class HeaterControlUI(QMainWindow):
             return
 
         try:
-            setpoint = round((self.setpoint_spin.value()  * self.compensation_rate) + self.compensation_offset, 2)
+            setpoint = round(
+                (self.setpoint_spin.value() * self.compensation_rate)
+                + self.compensation_offset,
+                2,
+            )
 
             # Handle "None" sensor group
             if sensor_group == "None":
@@ -3800,7 +4111,9 @@ class HeaterControlUI(QMainWindow):
                     # Update display
                     self.update_pid_display()
 
-                    self.log_message(f"Retrieved PID values: Kp={kp:.4f}, Ki={ki:.4f}, Kd={kd:.4f}")
+                    self.log_message(
+                        f"Retrieved PID values: Kp={kp:.4f}, Ki={ki:.4f}, Kd={kd:.4f}"
+                    )
                     return True
 
         except (ValueError, IndexError) as e:
@@ -3814,7 +4127,7 @@ class HeaterControlUI(QMainWindow):
         is placed at that index in `self.profile_steps`; otherwise it's
         appended to the end.
         """
-        if not hasattr(self, 'profile_steps_layout'):
+        if not hasattr(self, "profile_steps_layout"):
             return
 
         if step_number is None:
@@ -3895,23 +4208,25 @@ class HeaterControlUI(QMainWindow):
 
         # Store step data
         step_data = {
-            'widget': step_widget,
-            'layout': step_layout,
-            'temp_spin': temp_spin,
-            'hold_spin': hold_spin,
-            'tol_spin': tol_spin,
-            'bundle_radio': bundle_radio,
-            'repeats_spin': repeats_spin,
-            'insert_btn': insert_btn,
-            'delete_btn': delete_btn,
-            'step_number': step_number,
+            "widget": step_widget,
+            "layout": step_layout,
+            "temp_spin": temp_spin,
+            "hold_spin": hold_spin,
+            "tol_spin": tol_spin,
+            "bundle_radio": bundle_radio,
+            "repeats_spin": repeats_spin,
+            "insert_btn": insert_btn,
+            "delete_btn": delete_btn,
+            "step_number": step_number,
         }
 
         # Connect per-row buttons now that step_data exists.
         insert_btn.clicked.connect(
-            lambda _checked=False, sd=step_data: self.insert_profile_step_above(sd))
+            lambda _checked=False, sd=step_data: self.insert_profile_step_above(sd)
+        )
         delete_btn.clicked.connect(
-            lambda _checked=False, sd=step_data: self.delete_profile_step(sd))
+            lambda _checked=False, sd=step_data: self.delete_profile_step(sd)
+        )
 
         if insert_at is None or insert_at >= len(self.profile_steps):
             self.profile_steps.append(step_data)
@@ -3945,8 +4260,8 @@ class HeaterControlUI(QMainWindow):
             return  # Keep at least one step
 
         step_data = self.profile_steps.pop()
-        step_data['widget'].setParent(None)
-        step_data['widget'].deleteLater()
+        step_data["widget"].setParent(None)
+        step_data["widget"].deleteLater()
 
         # Update scroll area height
         self.update_profile_scroll_height()
@@ -3964,7 +4279,8 @@ class HeaterControlUI(QMainWindow):
         if self.profile_active and idx <= self.current_profile_step:
             self.log_message(
                 "Cannot insert above the current or past steps while the "
-                "profile is running.")
+                "profile is running."
+            )
             return
         new_step = self.add_profile_step(insert_at=idx)
         if new_step is not None:
@@ -3981,11 +4297,12 @@ class HeaterControlUI(QMainWindow):
         if self.profile_active and idx <= self.current_profile_step:
             self.log_message(
                 "Cannot delete the current or past steps while the profile "
-                "is running. Use 'Skip Step' to advance instead.")
+                "is running. Use 'Skip Step' to advance instead."
+            )
             return
         self.profile_steps.pop(idx)
-        ref_step['widget'].setParent(None)
-        ref_step['widget'].deleteLater()
+        ref_step["widget"].setParent(None)
+        ref_step["widget"].deleteLater()
         self.update_profile_scroll_height()
         self.update_profile_step_numbers()
         self.log_message(f"Deleted step {idx + 1}")
@@ -3997,13 +4314,14 @@ class HeaterControlUI(QMainWindow):
         if not self.profile_active:
             return
         self.log_message(
-            f"User skipped step {self.current_profile_step + 1}; advancing.")
+            f"User skipped step {self.current_profile_step + 1}; advancing."
+        )
         # Reset the hold-time accounting on the current step so the next
         # entry into it (if any, via a bundle repeat) starts cleanly.
         try:
             step_data = self.profile_steps[self.current_profile_step]
-            step_data['hold_start_time'] = None
-            step_data['step_start_time'] = None
+            step_data["hold_start_time"] = None
+            step_data["step_start_time"] = None
         except (IndexError, KeyError):
             pass
         self.move_to_next_execution_step()
@@ -4011,10 +4329,10 @@ class HeaterControlUI(QMainWindow):
     def update_profile_step_numbers(self):
         """Update step number labels"""
         for i, step_data in enumerate(self.profile_steps):
-            step_data['step_number'] = i
+            step_data["step_number"] = i
             # Find the step label (first widget in the layout)
-            if step_data['layout'].count() > 0:
-                step_label = step_data['layout'].itemAt(0).widget()
+            if step_data["layout"].count() > 0:
+                step_label = step_data["layout"].itemAt(0).widget()
                 if isinstance(step_label, QLabel):
                     step_label.setText(f"Step {i + 1}:")
 
@@ -4037,16 +4355,22 @@ class HeaterControlUI(QMainWindow):
             self.clear_plot()
             # Validate profile steps
             for step_data in self.profile_steps:
-                temp = step_data['temp_spin'].value()
-                hold = step_data['hold_spin'].value()
-                tol = step_data['tol_spin'].value()
+                temp = step_data["temp_spin"].value()
+                hold = step_data["hold_spin"].value()
+                tol = step_data["tol_spin"].value()
 
                 if temp < 0 or temp > 140:
-                    self.log_message(f"Invalid temperature {temp} ±{tol}°C in step {step_data['step_number'] + 1}")
+                    self.log_message(
+                        f"Invalid temperature {temp} ±{tol}°C in step "
+                        f"{step_data['step_number'] + 1}"
+                    )
                     return
 
                 if hold < 1:
-                    self.log_message(f"Invalid hold time {hold}s in step {step_data['step_number'] + 1}")
+                    self.log_message(
+                        f"Invalid hold time {hold}s in step "
+                        f"{step_data['step_number'] + 1}"
+                    )
                     return
 
             # Process profile steps into execution sequence
@@ -4077,43 +4401,52 @@ class HeaterControlUI(QMainWindow):
             self.log_message(f"Error starting profile: {e}")
 
     def process_profile_bundles(self):
-        """Process profile steps into execution sequence - bundles can repeat, single steps execute once"""
+        """Process profile steps into execution sequence - bundles can repeat,
+        single steps execute once"""
         execution_sequence = []
 
         i = 0
         while i < len(self.profile_steps):
             step_data = self.profile_steps[i]
 
-            if step_data['bundle_radio'].isChecked():
+            if step_data["bundle_radio"].isChecked():
                 # This step starts a bundle - find consecutive checked steps
                 bundle_start = i
                 bundle_steps = []
 
                 # Find the end of the bundle (consecutive checked steps)
-                while (i < len(self.profile_steps) and 
-                       self.profile_steps[i]['bundle_radio'].isChecked()):
+                while (
+                    i < len(self.profile_steps)
+                    and self.profile_steps[i]["bundle_radio"].isChecked()
+                ):
                     bundle_steps.append(i)
                     i += 1
 
                 # Get the repeat count from the first step in the bundle
-                bundle_repeats = self.profile_steps[bundle_start]['repeats_spin'].value()
+                bundle_repeats = self.profile_steps[bundle_start][
+                    "repeats_spin"
+                ].value()
 
                 # Add bundle to execution sequence
-                execution_sequence.append({
-                    'type': 'bundle',
-                    'steps': bundle_steps,
-                    'repeats': bundle_repeats,
-                    'current_repeat': 0,
-                    'current_step_in_bundle': 0
-                })
+                execution_sequence.append(
+                    {
+                        "type": "bundle",
+                        "steps": bundle_steps,
+                        "repeats": bundle_repeats,
+                        "current_repeat": 0,
+                        "current_step_in_bundle": 0,
+                    }
+                )
             else:
                 # Single step - execute once (no repeats)
-                execution_sequence.append({
-                    'type': 'single',
-                    'step': i,
-                    'repeats': 1,  # Single steps always execute once
-                    'current_repeat': 0
-                })
+                execution_sequence.append(
+                    {
+                        "type": "single",
+                        "step": i,
+                        "repeats": 1,  # Single steps always execute once
+                        "current_repeat": 0,
+                    }
+                )
                 i += 1
 
         return execution_sequence
@@ -4161,24 +4494,40 @@ class HeaterControlUI(QMainWindow):
 
     def execute_profile_step(self):
         """Execute the current profile step (now handles execution sequence)"""
-        if not self.profile_active or self.current_execution_index >= len(self.execution_sequence):
-            self.log_message(f"Profile execution stopped: active={self.profile_active}, index={self.current_execution_index}, total_items={len(self.execution_sequence)}")
+        if not self.profile_active or self.current_execution_index >= len(
+            self.execution_sequence
+        ):
+            self.log_message(
+                f"Profile execution stopped: active={self.profile_active}, "
+                f"index={self.current_execution_index}, "
+                f"total_items={len(self.execution_sequence)}"
+            )
             self.stop_temperature_profile()
             return
 
         try:
             current_item = self.execution_sequence[self.current_execution_index]
 
-            if current_item['type'] == 'bundle':
+            if current_item["type"] == "bundle":
                 # Execute current step in bundle
-                step_idx = current_item['steps'][current_item['current_step_in_bundle']]
+                step_idx = current_item["steps"][current_item["current_step_in_bundle"]]
 
-                self.log_message(f"Executing bundle {self.current_execution_index + 1}, step {step_idx + 1}, repeat {current_item['current_repeat'] + 1}/{current_item['repeats']}")
+                self.log_message(
+                    f"Executing bundle {self.current_execution_index + 1}, "
+                    f"step {step_idx + 1}, repeat "
+                    f"{current_item['current_repeat'] + 1}/"
+                    f"{current_item['repeats']}"
+                )
 
                 # Update display
-                self.current_step_label.setText(f"Bundle {self.current_execution_index + 1}: Step {step_idx + 1}, Repeat {current_item['current_repeat'] + 1}/{current_item['repeats']}")
+                self.current_step_label.setText(
+                    f"Bundle {self.current_execution_index + 1}: Step "
+                    f"{step_idx + 1}, Repeat "
+                    f"{current_item['current_repeat'] + 1}/"
+                    f"{current_item['repeats']}"
+                )
             else:
-                step_idx = current_item['step']
+                step_idx = current_item["step"]
 
                 self.log_message(f"Executing single step {step_idx + 1}")
 
@@ -4186,15 +4535,17 @@ class HeaterControlUI(QMainWindow):
                 self.current_step_label.setText(f"Step {step_idx + 1}")
 
             step_data = self.profile_steps[step_idx]
-            target_temp = step_data['temp_spin'].value()
-            hold_time = step_data['hold_spin'].value()
-            tolerance = step_data['tol_spin'].value()
-            step_data['hold_start_time'] = None
-            step_data['step_start_time'] = datetime.now()
+            target_temp = step_data["temp_spin"].value()
+            hold_time = step_data["hold_spin"].value()
+            tolerance = step_data["tol_spin"].value()
+            step_data["hold_start_time"] = None
+            step_data["step_start_time"] = datetime.now()
 
             # Set temperature
             self.setpoint_spin.setValue(target_temp)
-            target_temp = round((target_temp * self.compensation_rate) + self.compensation_offset, 2)
+            target_temp = round(
+                (target_temp * self.compensation_rate) + self.compensation_offset, 2
+            )
             self.current_setpoint = target_temp
 
             # Change setpoint (PID should already be running)
@@ -4202,16 +4553,24 @@ class HeaterControlUI(QMainWindow):
             if sensor_group == "None":
                 cmd = self.get_heater_cmd(f"pid_{{heater}}_{target_temp}")
             else:
-                cmd = self.get_heater_cmd(f"pid_{{heater}}_{target_temp}_{sensor_group}")
+                cmd = self.get_heater_cmd(
+                    f"pid_{{heater}}_{target_temp}_{sensor_group}"
+                )
             self.send_cmd_with_log(cmd)
             self.pid_enabled = True
             self.current_profile_step = step_idx
 
-            if current_item['type'] == 'bundle':
-                self.log_message(f"Bundle Step {step_idx + 1}: Target {target_temp}°C, Hold {hold_time}s, Tolerance ±{tolerance}°C")
+            if current_item["type"] == "bundle":
+                self.log_message(
+                    f"Bundle Step {step_idx + 1}: Target {target_temp}°C, "
+                    f"Hold {hold_time}s, Tolerance ±{tolerance}°C"
+                )
 
             else:
-                self.log_message(f"Single Step {step_idx + 1}: Target {target_temp}°C, Hold {hold_time}s, Tolerance ±{tolerance}°C")
+                self.log_message(
+                    f"Single Step {step_idx + 1}: Target {target_temp}°C, "
+                    f"Hold {hold_time}s, Tolerance ±{tolerance}°C"
+                )
 
         except Exception as e:
             self.log_message(f"Error executing profile step: {e}")
@@ -4223,57 +4582,63 @@ class HeaterControlUI(QMainWindow):
 
         try:
             step_data = self.profile_steps[self.current_profile_step]
-            target_temp = round((step_data['temp_spin'].value() * self.compensation_rate) + self.compensation_offset, 2)
-            tolerance = step_data['tol_spin'].value()
+            target_temp = round(
+                (step_data["temp_spin"].value() * self.compensation_rate)
+                + self.compensation_offset,
+                2,
+            )
+            tolerance = step_data["tol_spin"].value()
 
             # Check if temperature is within tolerance
             temp_diff = abs(temp_data - target_temp)
             if temp_diff <= tolerance:
                 # Temperature reached, start hold timer
-                if step_data.get('hold_start_time', None) is None:
-                    step_data['hold_start_time'] = datetime.now()
-                    self.log_message(f"Temperature reached! Holding for {step_data['hold_spin'].value()}s...")
+                if step_data.get("hold_start_time", None) is None:
+                    step_data["hold_start_time"] = datetime.now()
+                    self.log_message(
+                        f"Temperature reached! Holding for "
+                        f"{step_data['hold_spin'].value()}s..."
+                    )
 
             # Calculate elapsed times
-            step_start_time = step_data.get('step_start_time', None)
-            hold_start_time = step_data.get('hold_start_time', None)
+            step_start_time = step_data.get("step_start_time", None)
+            hold_start_time = step_data.get("hold_start_time", None)
 
             if step_start_time:
-                total_elapsed = (
-                    datetime.now() - step_start_time).total_seconds()
+                total_elapsed = (datetime.now() - step_start_time).total_seconds()
             else:
                 total_elapsed = 0
 
             if hold_start_time:
-                hold_elapsed = (
-                    datetime.now() - hold_start_time).total_seconds()
+                hold_elapsed = (datetime.now() - hold_start_time).total_seconds()
             else:
                 hold_elapsed = 0
 
             # Update step label with elapsed times
-            current_item = self.execution_sequence[
-                self.current_execution_index]
-            if current_item['type'] == 'bundle':
+            current_item = self.execution_sequence[self.current_execution_index]
+            if current_item["type"] == "bundle":
                 step_idx = self.current_profile_step
-                repeat_info = (f"{current_item['current_repeat'] + 1}/"
-                               f"{current_item['repeats']}")
-                label_text = (f"Bundle {self.current_execution_index + 1}: "
-                              f"Step {step_idx + 1}, Repeat {repeat_info} | "
-                              f"Total: {int(total_elapsed)}s")
+                repeat_info = (
+                    f"{current_item['current_repeat'] + 1}/{current_item['repeats']}"
+                )
+                label_text = (
+                    f"Bundle {self.current_execution_index + 1}: "
+                    f"Step {step_idx + 1}, Repeat {repeat_info} | "
+                    f"Total: {int(total_elapsed)}s"
+                )
                 if hold_start_time:
                     label_text += f" | Hold: {int(hold_elapsed)}s"
                 label_text += f" | Target: {target_temp}°C, Tolerance ±{tolerance}°C"
             else:
                 step_idx = self.current_profile_step
-                label_text = (f"Step {step_idx + 1} | "
-                              f"Total: {int(total_elapsed)}s")
+                label_text = f"Step {step_idx + 1} | Total: {int(total_elapsed)}s"
                 if hold_start_time:
                     label_text += f" | Hold: {int(hold_elapsed)}s"
 
             self.current_step_label.setText(label_text)
 
             # Check if hold time is complete
-            if hold_elapsed >= step_data['hold_spin'].value():
+            if hold_elapsed >= step_data["hold_spin"].value():
                 # Step complete, move to next step in execution sequence
                 self.log_message(f"Step {self.current_profile_step + 1} complete!")
                 self.move_to_next_execution_step()
@@ -4288,28 +4653,34 @@ class HeaterControlUI(QMainWindow):
 
         current_item = self.execution_sequence[self.current_execution_index]
 
-        if current_item['type'] == 'bundle':
+        if current_item["type"] == "bundle":
             # Check if we've completed all steps in the bundle
-            if current_item['current_step_in_bundle'] < len(current_item['steps']) - 1:
+            if current_item["current_step_in_bundle"] < len(current_item["steps"]) - 1:
                 # Move to next step in bundle
-                current_item['current_step_in_bundle'] += 1
+                current_item["current_step_in_bundle"] += 1
                 self.execute_profile_step()
             else:
                 # All steps in bundle complete, check repeats
-                current_item['current_repeat'] += 1
+                current_item["current_repeat"] += 1
 
-                if current_item['current_repeat'] < current_item['repeats']:
+                if current_item["current_repeat"] < current_item["repeats"]:
                     # Repeat bundle from beginning
-                    self.log_message(f"Bundle repeat {current_item['current_repeat'] + 1}/{current_item['repeats']} complete, repeating...")
-                    current_item['current_step_in_bundle'] = 0  # Start from first step
+                    self.log_message(
+                        f"Bundle repeat {current_item['current_repeat'] + 1}/"
+                        f"{current_item['repeats']} complete, repeating..."
+                    )
+                    current_item["current_step_in_bundle"] = 0  # Start from first step
                     self.execute_profile_step()
                 else:
                     # Bundle complete, move to next execution item
-                    self.log_message(f"Bundle {self.current_execution_index + 1} complete!")
+                    self.log_message(
+                        f"Bundle {self.current_execution_index + 1} complete!"
+                    )
                     self.current_execution_index += 1
                     self.execute_profile_step()
         else:
-            # Single step complete, move to next execution item (no repeats for single steps)
+            # Single step complete, move to next execution item (no repeats
+            # for single steps)
             self.log_message(f"Single step {current_item['step'] + 1} complete!")
             self.current_execution_index += 1
             self.execute_profile_step()
@@ -4317,20 +4688,20 @@ class HeaterControlUI(QMainWindow):
     def serialize_profile(self):
         """Serialize current profile steps to JSON-compatible dictionary"""
         profile_data = {
-            'profile_name': 'Temperature Profile',
-            'version': '1.0',
-            'steps': []
+            "profile_name": "Temperature Profile",
+            "version": "1.0",
+            "steps": [],
         }
 
         for step_data in self.profile_steps:
             step_dict = {
-                'temperature': step_data['temp_spin'].value(),
-                'hold_time': step_data['hold_spin'].value(),
-                'tolerance': step_data['tol_spin'].value(),
-                'is_bundle': step_data['bundle_radio'].isChecked(),
-                'repeats': step_data['repeats_spin'].value()
+                "temperature": step_data["temp_spin"].value(),
+                "hold_time": step_data["hold_spin"].value(),
+                "tolerance": step_data["tol_spin"].value(),
+                "is_bundle": step_data["bundle_radio"].isChecked(),
+                "repeats": step_data["repeats_spin"].value(),
             }
-            profile_data['steps'].append(step_dict)
+            profile_data["steps"].append(step_dict)
 
         return profile_data
 
@@ -4339,17 +4710,17 @@ class HeaterControlUI(QMainWindow):
         # Clear existing steps
         while len(self.profile_steps) > 0:
             step_data = self.profile_steps.pop()
-            step_data['widget'].setParent(None)
-            step_data['widget'].deleteLater()
+            step_data["widget"].setParent(None)
+            step_data["widget"].deleteLater()
 
         # Create steps from loaded data
-        for step_dict in profile_data.get('steps', []):
+        for step_dict in profile_data.get("steps", []):
             step_data = self.add_profile_step()
-            step_data['temp_spin'].setValue(step_dict.get('temperature', 40.0))
-            step_data['hold_spin'].setValue(step_dict.get('hold_time', 60))
-            step_data['tol_spin'].setValue(step_dict.get('tolerance', 1.0))
-            step_data['bundle_radio'].setChecked(step_dict.get('is_bundle', False))
-            step_data['repeats_spin'].setValue(step_dict.get('repeats', 1))
+            step_data["temp_spin"].setValue(step_dict.get("temperature", 40.0))
+            step_data["hold_spin"].setValue(step_dict.get("hold_time", 60))
+            step_data["tol_spin"].setValue(step_dict.get("tolerance", 1.0))
+            step_data["bundle_radio"].setChecked(step_dict.get("is_bundle", False))
+            step_data["repeats_spin"].setValue(step_dict.get("repeats", 1))
 
         # Update scroll area
         self.update_profile_scroll_height()
@@ -4372,7 +4743,7 @@ class HeaterControlUI(QMainWindow):
                 self,
                 "Save Temperature Profile",
                 str(profiles_dir / "profile.json"),
-                "JSON Files (*.json)"
+                "JSON Files (*.json)",
             )
 
             if file_path:
@@ -4380,7 +4751,7 @@ class HeaterControlUI(QMainWindow):
                 profile_data = self.serialize_profile()
 
                 # Save to file
-                with open(file_path, 'w') as f:
+                with open(file_path, "w") as f:
                     json.dump(profile_data, f, indent=2)
 
                 self.log_message(f"Profile saved to: {file_path}")
@@ -4402,12 +4773,12 @@ class HeaterControlUI(QMainWindow):
                 self,
                 "Load Temperature Profile",
                 str(profiles_dir),
-                "JSON Files (*.json)"
+                "JSON Files (*.json)",
             )
 
             if file_path:
                 # Load from file
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     profile_data = json.load(f)
 
                 # Deserialize profile
@@ -4467,7 +4838,9 @@ class HeaterControlUI(QMainWindow):
             self.send_cmd_with_log(cmd)
             self.log_message(f"Setpoint changed to {value}°C and sent to device")
         else:
-            self.log_message(f"Setpoint changed to {value}°C (will apply when PID starts)")
+            self.log_message(
+                f"Setpoint changed to {value}°C (will apply when PID starts)"
+            )
 
     @Slot(bool)
     def on_pid_toggled(self, checked):
@@ -4476,11 +4849,16 @@ class HeaterControlUI(QMainWindow):
 
         # If stream is active, restart with the new mode
         if self.stream_active:
-            self.log_message(f"PID mode {'enabled' if checked else 'disabled'}, restarting stream...")
+            self.log_message(
+                f"PID mode {'enabled' if checked else 'disabled'}, restarting stream..."
+            )
             self.start_stream()
         else:
             # Just log that the setting has changed
-            self.log_message(f"PID mode {'enabled' if checked else 'disabled'} (will apply on next stream start)")
+            self.log_message(
+                f"PID mode {'enabled' if checked else 'disabled'} (will "
+                f"apply on next stream start)"
+            )
 
     @Slot(bool)
     def on_logging_toggled(self, checked):
@@ -4513,7 +4891,7 @@ class HeaterControlUI(QMainWindow):
     def clear_plot(self):
         """Clear the plot data and reset the display"""
         try:
-            if hasattr(self, 'plot_widget') and self.plot_widget:
+            if hasattr(self, "plot_widget") and self.plot_widget:
                 # Clear all data arrays
                 self.plot_widget.timestamps.clear()
                 self.plot_widget.sensor_data.clear()
@@ -4550,11 +4928,11 @@ class HeaterControlUI(QMainWindow):
 
     def get_heater_cmd(self, cmd_template):
         """Generate heater-specific command using current heater selection
-        
+
         Args:
             cmd_template: Command template with {heater} placeholder
                          e.g. "pid_{heater}_enable" or "pwm_{heater}_50"
-        
+
         Returns:
             Command string with heater name substituted
         """
@@ -4591,7 +4969,7 @@ class HeaterControlUI(QMainWindow):
         """Handle application close"""
         try:
             # Stop animation first
-            if hasattr(self, 'plot_widget') and self.plot_widget:
+            if hasattr(self, "plot_widget") and self.plot_widget:
                 self.plot_widget.stop_animation()
 
             if self.board:

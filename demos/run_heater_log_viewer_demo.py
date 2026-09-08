@@ -1,3 +1,13 @@
+# (C) Copyright 2024-2026 Blue Ocean Technologies, Inc., Toronto, ON
+# All rights reserved.
+#
+# This software is provided without warranty under the terms of the AGPL-3.0
+# license included in LICENSE and may be redistributed only under the
+# conditions described in the aforementioned license. The license is also
+# available online at https://www.gnu.org/licenses/agpl-3.0.txt
+#
+# Thanks for using Microdrop open source!
+
 """Heater Log Viewer demo (standalone).
 
 Opens the Log Viewer panel — the model/view/controller trio from
@@ -10,6 +20,8 @@ experiment's heater_logs.
 Run:
     python demos/run_heater_log_viewer_demo.py
 """
+
+# Standard library imports.
 import json
 import math
 import os
@@ -18,16 +30,17 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from PySide6.QtWidgets import QApplication
 
-from microdrop_style.helpers import style_app
-
 from heater_controls_ui.plots.log_model import HeaterLogViewerModel
 from heater_controls_ui.plots.log_view import (
-    HeaterLogViewerController, LogView,
+    HeaterLogViewerController,
+    LogView,
 )
+
+from microdrop_style.helpers import style_app
 
 
 def write_sample_log(log_dir):
@@ -42,19 +55,32 @@ def write_sample_log(log_dir):
             stamp = (start + timedelta(seconds=tick / 2)).isoformat()
             bath = 25 + 40 * (1 - math.exp(-tick / 120))
             lid = 24 + 20 * (1 - math.exp(-tick / 160))
-            log_file.write(json.dumps({
-                "timestamp": stamp, "board_timestamp": tick / 2,
-                "_frame": "TEMP",
-                "temperatures": {"bath": round(bath, 2),
-                                 "lid": round(lid, 2)},
-            }) + "\n")
-            log_file.write(json.dumps({
-                "timestamp": stamp, "board_timestamp": tick / 2,
-                "_frame": "PID_TEC1",
-                "pid_target": 65.0,
-                "pid_temperature": round(bath + 0.6 * math.sin(tick / 5), 2),
-                "pwm_percentage": round(max(0.0, 80 * math.exp(-tick / 100)), 1),
-            }) + "\n")
+            log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": stamp,
+                        "board_timestamp": tick / 2,
+                        "_frame": "TEMP",
+                        "temperatures": {"bath": round(bath, 2), "lid": round(lid, 2)},
+                    }
+                )
+                + "\n"
+            )
+            log_file.write(
+                json.dumps(
+                    {
+                        "timestamp": stamp,
+                        "board_timestamp": tick / 2,
+                        "_frame": "PID_TEC1",
+                        "pid_target": 65.0,
+                        "pid_temperature": round(bath + 0.6 * math.sin(tick / 5), 2),
+                        "pwm_percentage": round(
+                            max(0.0, 80 * math.exp(-tick / 100)), 1
+                        ),
+                    }
+                )
+                + "\n"
+            )
     return log_path
 
 
@@ -62,14 +88,18 @@ def main():
     app = QApplication.instance() or QApplication(sys.argv)
     style_app(app)
 
-    demo_logs_dir = (Path(tempfile.mkdtemp(prefix="heater_log_viewer_demo_"))
-                     / "heater_logs")
+    demo_logs_dir = (
+        Path(tempfile.mkdtemp(prefix="heater_log_viewer_demo_")) / "heater_logs"
+    )
     sample_log = write_sample_log(demo_logs_dir)
     print(f"Sample log written: {sample_log}")
 
     model = HeaterLogViewerModel()
     handler = HeaterLogViewerController(model)
-    model.directory ="C:\\Users\Info\Documents\Sci-Bots\Microdrop\Experiments\\2026_07_13-19_38_54\heater_logs"
+    model.directory = (
+        "C:\\Users\\Info\\Documents\\Sci-Bots\\Microdrop\\Experiments\\"
+        "2026_07_13-19_38_54\\heater_logs"
+    )
     model.configure_traits(view=LogView, handler=handler)
 
 
