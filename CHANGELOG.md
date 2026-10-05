@@ -1,3 +1,9 @@
+## [v1.10.2](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.2) (2026-10-05)
+
+### Fix
+
+- **protocol-controls**: report temp on reach timeout ([`97d888f`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/97d888ff9a4c1067b9e5a85102c8a078173925e0))
+
 ## [v1.10.1](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.1) (2026-09-01)
 
 ### Fix
