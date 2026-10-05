@@ -13,9 +13,16 @@
 # Standard library imports.
 import json
 
+# Third-party imports.
+import pytest
+
 # Microdrop package imports.
 import heater_protocol_controls.protocol_columns.temperature_column as tc_mod
-from heater_controller.consts import PROTOCOL_SET_TEMPERATURE, TEMPERATURE_REACHED
+from heater_controller.consts import (
+    PROTOCOL_SET_TEMPERATURE,
+    TELEMETRY,
+    TEMPERATURE_REACHED,
+)
 from heater_protocol_controls.consts import SET_TEMPERATURE_FIELD_ID
 from heater_protocol_controls.plugin import HeaterProtocolControlsPlugin
 from heater_protocol_controls.protocol_columns.temperature_column import (
@@ -41,6 +48,63 @@ class _Ctx:
         self.waited = (topic, timeout)
 
 
+class _TimedOutCtx(_Ctx):
+    """The reached ack never arrives; ``telemetry`` is what the step's
+    TELEMETRY mailbox collected during the wait (oldest first)."""
+
+    def __init__(self, telemetry):
+        super().__init__()
+        self.telemetry = [json.dumps(packet) for packet in telemetry]
+
+    def wait_for(self, topic, timeout=None):
+        if topic == TELEMETRY and self.telemetry:
+            return self.telemetry.pop(0)
+
+        raise TimeoutError(f"Timed out waiting for a reply on {topic!r}.")
+
+
+def _run_timed_out_step(monkeypatch, telemetry):
+    monkeypatch.setattr(tc_mod, "publish_message", lambda topic, message: None)
+    handler = TemperatureHandler()
+    handler.ack_time_s = 120.0
+
+    class _HotRow(_Row):
+        target_temperature_c = 80.0
+        tolerance_c = 1.0
+
+    with pytest.raises(TimeoutError) as excinfo:
+        handler.on_step(_HotRow(), _TimedOutCtx(telemetry))
+
+    return excinfo.value
+
+
+def test_timeout_reports_last_temperature_against_band(monkeypatch):
+    error = _run_timed_out_step(
+        monkeypatch,
+        [
+            {"_frame": "PID_TEC1", "pid_temperature": 77.9},
+            {"_frame": "TEMP", "temperatures": {"bath": 81.0}},
+            {"_frame": "PID_TEC2", "pid_temperature": 80.2},
+            {"_frame": "PID_TEC1", "pid_temperature": 78.7},
+        ],
+    )
+
+    message = str(error)
+    assert "Heater tec1 did not reach 80 ± 1 °C within 120 s" in message
+    assert "last measured 78.7 °C (needs 79–81 °C)" in message
+    assert isinstance(error.__cause__, TimeoutError)
+
+
+def test_timeout_without_telemetry_says_no_reading(monkeypatch):
+    error = _run_timed_out_step(monkeypatch, [])
+
+    message = str(error)
+    assert "Heater tec1 did not reach 80 ± 1 °C within 120 s" in message
+    assert "no temperature reading for tec1 arrived during the wait" in message
+    assert "last measured" not in message
+    assert isinstance(error.__cause__, TimeoutError)
+
+
 def test_model_has_three_fields():
     specs = TemperatureCompoundModel().field_specs()
     assert [s.field_id for s in specs] == [
@@ -53,7 +117,7 @@ def test_model_has_three_fields():
 
 def test_factory_and_plugin_contribution():
     col = make_temperature_column()
-    assert col.handler.wait_for_topics == [TEMPERATURE_REACHED]
+    assert col.handler.wait_for_topics == [TEMPERATURE_REACHED, TELEMETRY]
     assert col.handler.priority == 20
     cols = HeaterProtocolControlsPlugin()._contributed_protocol_columns_default()
     assert len(cols) == 1

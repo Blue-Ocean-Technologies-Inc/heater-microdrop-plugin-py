@@ -22,7 +22,8 @@ framework):
 For a checked step the handler publishes PROTOCOL_SET_TEMPERATURE; the heater
 backend sets the target, watches the PID telemetry, and acks on
 TEMPERATURE_REACHED once within tolerance — which the step's ``ctx.wait_for``
-is blocking on.
+is blocking on. If that wait times out, the step's TELEMETRY mailbox supplies
+the last PID temperature so the failure says how far off the heater was.
 """
 
 # Standard library imports.
@@ -38,6 +39,7 @@ from heater_controller.consts import (
     DEFAULT_HEATER,
     PROTOCOL_SET_TEMPERATURE,
     STOP_STREAM,
+    TELEMETRY,
     TEMPERATURE_REACHED,
 )
 from pluggable_protocol_tree.interfaces.i_compound_column import FieldSpec
@@ -98,6 +100,62 @@ class TemperatureSetpointSpinBoxView(DoubleSpinBoxColumnView):
         return flags
 
 
+def last_pid_temperature(ctx, heater):
+    """Drain the step's TELEMETRY mailbox and return the last PID temperature
+    reported for ``heater``, or None when none arrived during the step.
+
+    Reads the same ``pid_temperature`` of the ``PID_<HEATER>`` frames the
+    backend's reached-watch compares against the target.
+    """
+    temperature = None
+
+    while True:
+        try:
+            payload = ctx.wait_for(TELEMETRY, timeout=0.0)
+        except TimeoutError:
+            return temperature
+
+        try:
+            packet = json.loads(payload)
+        except (TypeError, ValueError):
+            # A malformed frame says nothing about the heater; keep scanning.
+            continue
+
+        if not isinstance(packet, dict):
+            continue
+
+        frame = packet.get("_frame", "")
+        reading = packet.get("pid_temperature")
+
+        if frame.lower() == f"pid_{heater.lower()}" and isinstance(
+            reading, (int, float)
+        ):
+            temperature = reading
+
+
+def temperature_not_reached_message(
+    heater, target, tolerance, timeout_s, last_temperature
+):
+    """Explain a reached-ack timeout: the last measured temperature against
+    the armed band, or that no reading arrived at all."""
+    summary = (
+        f"Heater {heater} did not reach {target:g} ± {tolerance:g} °C "
+        f"within {timeout_s:g} s"
+    )
+
+    if last_temperature is None:
+        return (
+            f"{summary} — no temperature reading for {heater} arrived during "
+            f"the wait. The heater board may be disconnected or not streaming "
+            f"telemetry."
+        )
+
+    return (
+        f"{summary} — last measured {last_temperature:g} °C "
+        f"(needs {target - tolerance:g}–{target + tolerance:g} °C)."
+    )
+
+
 class TemperatureHandler(BaseCompoundColumnHandler):
     """Publishes the step's target + tolerance and waits for the reached ack.
 
@@ -107,7 +165,9 @@ class TemperatureHandler(BaseCompoundColumnHandler):
     """
 
     priority = 20
-    wait_for_topics = [TEMPERATURE_REACHED]
+    # TELEMETRY is only read after a reached-ack timeout, to report the last
+    # measured temperature instead of a generic "no reply".
+    wait_for_topics = [TEMPERATURE_REACHED, TELEMETRY]
     # Heating/cooling to a setpoint is slow, so default the ack-wait higher than
     # voltage/frequency (5 s) or magnet (10 s).
     default_ack_time_s = 120.0
@@ -115,27 +175,44 @@ class TemperatureHandler(BaseCompoundColumnHandler):
     def on_step(self, row, ctx):
         if getattr(ctx.protocol, "preview_mode", False):
             return
+
         # Unchecked = the step leaves the heater untouched: no setpoint
         # publish, no reached-ack wait (issue #9).
         if not getattr(row, SET_TEMPERATURE_FIELD_ID, False):
             return
+
+        # Compensation (advanced-mode preference) maps the step's base target
+        # the same way the controls pane maps its setpoint; the tolerance band
+        # stays in raw degrees.
+        target = compensate_setpoint_from_preferences(float(row.target_temperature_c))
+        tolerance = float(row.tolerance_c)
+
         publish_message(
             topic=PROTOCOL_SET_TEMPERATURE,
             message=json.dumps(
                 {
                     "heater": DEFAULT_HEATER,
-                    # Compensation (advanced-mode preference) maps the step's base
-                    # target the same way the controls pane maps its setpoint; the
-                    # tolerance band stays in raw degrees.
-                    "temperature": compensate_setpoint_from_preferences(
-                        float(row.target_temperature_c)
-                    ),
-                    "tolerance": float(row.tolerance_c),
+                    "temperature": target,
+                    "tolerance": tolerance,
                 }
             ),
         )
-        if self.ack_time_s > 0:
+
+        if self.ack_time_s <= 0:
+            return
+
+        try:
             ctx.wait_for(TEMPERATURE_REACHED, timeout=self.ack_time_s)
+        except TimeoutError as error:
+            message = temperature_not_reached_message(
+                DEFAULT_HEATER,
+                target,
+                tolerance,
+                self.ack_time_s,
+                last_pid_temperature(ctx, DEFAULT_HEATER),
+            )
+
+            raise TimeoutError(message) from error
 
     def on_post_protocol_end(self, ctx):
         """Stop the PID + telemetry stream the protocol steps started —
