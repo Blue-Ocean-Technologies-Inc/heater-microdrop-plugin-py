@@ -14,12 +14,9 @@ import time
 # Enthought library imports.
 from traits.api import Bool, HasTraits, Instance, provides
 
-# Microdrop package imports.
-from microdrop_application.helpers import get_current_experiment_directory
-
 # Local imports.
-from ..consts import COMMAND_DELAY_SHORT, HEATER_LOGS_DIR_NAME
-from ..data_logger import heater_data_logger
+from ..consts import COMMAND_DELAY_SHORT
+from ..data_logger import current_heater_logs_directory, heater_data_logger
 from ..datamodels import (
     ProtocolSetTemperatureData,
     SetFanData,
@@ -202,11 +199,13 @@ class HeaterCommandSetterService(HasTraits):
         keeps collecting into the same file; stop/all_off/disconnect
         closing the log is what marks the stream as off. Never blocks the
         stream itself — with no reachable experiment directory (e.g.
-        no-Redis test runs) the stream simply runs unlogged."""
+        no-Redis test runs) the stream simply runs unlogged. An experiment
+        change mid-stream is followed by the logger itself
+        (``HeaterDataLogger.follow_experiment``)."""
         if heater_data_logger.is_active:
             return
         try:
-            log_dir = get_current_experiment_directory() / HEATER_LOGS_DIR_NAME
+            log_dir = current_heater_logs_directory()
         except Exception as e:
             logger.warning(
                 f"No experiment directory for heater logs; telemetry not logged: {e}"
