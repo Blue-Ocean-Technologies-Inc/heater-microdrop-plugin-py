@@ -216,8 +216,10 @@ class HeaterSerialProxy:
                         publish_message(json.dumps(pkt), TELEMETRY)
                         # Telemetry log collection (port of the legacy UI's
                         # DataLogger); a no-op unless the command service
-                        # started a log for the running stream.
+                        # started a log for the running stream, which then
+                        # follows experiment switches into the new folder.
                         heater_data_logger.log(pkt)
+                        heater_data_logger.follow_experiment()
                         self._check_temperature_watch(frame, pkt)
                 elif self._route_config_line(line):
                     continue  # consumed by the dump_config capture state machine

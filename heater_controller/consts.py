@@ -60,6 +60,12 @@ COMMAND_DELAY_SHORT = 1
 # standalone UI's DataLogger, which used the same folder name).
 HEATER_LOGS_DIR_NAME = "heater_logs"
 
+# Seconds between re-reads of the current experiment while a telemetry log is
+# open. No pub/sub topic announces a new experiment (only an in-process
+# Envisage event on the frontend app), so the logger polls app-globals to
+# roll the log over into the new experiment's heater_logs folder.
+EXPERIMENT_CHECK_INTERVAL_S = 5.0
+
 # Markers the firmware wraps its `dump_config` JSON response in.
 CONFIG_BEGIN = "<<<CONFIG_BEGIN>>>"
 CONFIG_END = "<<<CONFIG_END>>>"
