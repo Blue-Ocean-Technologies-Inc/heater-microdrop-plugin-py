@@ -1,3 +1,9 @@
+## [v1.10.3](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.3) (2026-10-06)
+
+### Fix
+
+- **controller**: roll the heater log over when the experiment changes ([`1bcdf69`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/1bcdf698c6cf803b6e6c7079836c287906436c74))
+
 ## [v1.10.2](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.2) (2026-10-05)
 
 ### Fix
