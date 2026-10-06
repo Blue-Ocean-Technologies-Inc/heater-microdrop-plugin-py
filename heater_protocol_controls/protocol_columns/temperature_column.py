@@ -31,7 +31,7 @@ import json
 
 # Enthought library imports.
 from pyface.qt.QtCore import Qt
-from traits.api import Bool, Float
+from traits.api import Bool, Float, List, Str
 
 # Microdrop package imports.
 from heater_controller.compensation import compensate_setpoint_from_preferences
@@ -92,6 +92,11 @@ class TemperatureSetpointSpinBoxView(DoubleSpinBoxColumnView):
     """Setpoint cell that is read-only while the step's Set Temp checkbox
     is off (cross-cell editability via the canonical PPT-11 get_flags(row)
     pattern, mirroring the magnet column's height cell)."""
+
+    #: get_flags is a pure function of the step's Set Temp flag; declare it so
+    #: the tree repaints this cell the moment the checkbox toggles instead of
+    #: waiting for an incidental repaint.
+    depends_on_row_traits = List(Str, value=[SET_TEMPERATURE_FIELD_ID])
 
     def get_flags(self, row):
         flags = super().get_flags(row)
