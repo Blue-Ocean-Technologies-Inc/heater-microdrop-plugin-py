@@ -1,3 +1,9 @@
+## [v1.10.5](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.5) (2026-10-07)
+
+### Perf
+
+- **plots**: redraw live plot only on new telemetry ([`ef3ed51`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/ef3ed51286940b1e9f8c60871acb77f5b5bb9fde))
+
 ## [v1.10.4](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.4) (2026-10-07)
 
 ### Fix
