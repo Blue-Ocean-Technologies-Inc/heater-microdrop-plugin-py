@@ -9,6 +9,7 @@
 # Thanks for using Microdrop open source!
 
 # Microdrop package imports.
+from device_viewer.consts import PROTOCOL_RUNNING
 from heater_controller.consts import (  # noqa: F401 (re-export)
     DATA_LOG_SAVED,
     DEVICE_NAME,
@@ -39,7 +40,7 @@ plot_listener_name = f"{PKG}_plot_listener"
 # plus the COMMANDED values (requests published by the controls pane) — the
 # PID target for the green setpoint line and the open-loop duty echo, neither
 # of which appears in telemetry — plus the saved-log signal that auto-updates
-# the Log Viewer tab.
+# the Log Viewer tab, and the protocol run state that throttles live redraws.
 ACTOR_TOPIC_DICT = {
     listener_name: [f"{DEVICE_NAME}/signals/#", ADVANCED_MODE_CHANGE],
     plot_listener_name: [
@@ -49,6 +50,7 @@ ACTOR_TOPIC_DICT = {
         SET_PWM,
         START_STREAM,
         STOP_STREAM,
+        PROTOCOL_RUNNING,
     ],
 }
 

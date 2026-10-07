@@ -107,11 +107,58 @@ def test_revision_moves_only_when_buffers_change():
     assert m.revision == before + 2
 
 
+def test_sample_without_new_telemetry_holds_but_does_not_bump_revision():
+    """The canvas ticks faster than telemetry arrives: a tick that only
+    repeats the held values still appends its point (the timeline stays
+    regular) but must not move the revision, or every tick redraws."""
+    m = HeaterPlotModel()
+    m.apply({"temperatures": {"inlet": 25.0}})
+    m.sample(now=0.0)
+    after_first_sample = m.revision
+
+    m.sample(now=0.5)  # no telemetry since the last tick
+
+    assert m.revision == after_first_sample
+    times, sensors, _pids, _pwms, _setpoints = m.snapshot()
+    assert times == [0.0, 0.5]
+    assert sensors["inlet"] == [25.0, 25.0]
+
+    m.apply({"temperatures": {"inlet": 25.0}})  # a frame, even if unchanged
+    m.sample(now=1.0)
+
+    assert m.revision == after_first_sample + 1
+
+
+def test_new_setpoint_and_pid_stop_count_as_new_data():
+    m = HeaterPlotModel()
+    m.apply({"heater": "tec1", "pid_temperature": 40.0, "pwm_percentage": 50.0})
+    m.sample(now=0.0)
+    before = m.revision
+
+    m.set_setpoint(45.0)
+    m.sample(now=0.5)
+
+    assert m.revision == before + 1
+
+    m.set_setpoint(45.0)  # unchanged target: nothing new to draw
+    m.sample(now=1.0)
+
+    assert m.revision == before + 1
+
+    m.apply({"temperatures": {"inlet": 25.0}})
+    m.sample(now=1.5)
+    m.drop_pid_series()  # PID lines gap out on the next sample
+    m.sample(now=2.0)
+
+    assert m.revision == before + 3
+
+
 def test_run_state_defaults():
     m = HeaterPlotModel()
     assert m.paused is False
     assert m.enabled is True
     assert m.hidden_series == set()
+    assert m.protocol_running is False
 
 
 def test_request_clear_bumps_counter_without_touching_buffers():
