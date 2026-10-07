@@ -24,8 +24,13 @@ The plot's run state also lives here so the view stays dumb:
 * ``enabled`` — False is a full stop: telemetry is ignored and all history is
   cleared. Re-enabling starts from an empty plot.
 * ``hidden_series`` — role-prefixed keys the user toggled off via the legend.
-* ``revision`` — bumped whenever the drawable buffers change, so the canvas
-  can skip redraws when nothing moved.
+* ``revision`` — bumped when the drawable buffers change: a clear, or a
+  sample taken after new telemetry / a new setpoint arrived. A sample that
+  only repeats the held values still appends its point but leaves the
+  revision alone, so the canvas redraws at the telemetry rate (and not at
+  all while telemetry is stalled) rather than on every timer tick.
+* ``protocol_running`` — mirrors PROTOCOL_RUNNING (set by the listener's
+  inherited handler); the canvas throttles its redraws while it is True.
 * ``clear_requested`` — bumped by the view (:meth:`request_clear`) to ask for
   a view-only purge of the buffered/plotted points. Telemetry keeps arriving
   and nothing upstream is touched; the canvas drains the request on its next
@@ -66,8 +71,11 @@ class HeaterPlotModel(HasTraits):
     )
     revision = Int(
         0,
-        desc="Bumped whenever the drawable buffers change; the "
+        desc="Bumped when the drawable buffers change with new data; the "
         "canvas redraws only when this moves.",
+    )
+    protocol_running = Bool(
+        False, desc="A protocol is executing; the canvas redraws less often."
     )
     clear_requested = Int(
         0,
@@ -97,6 +105,9 @@ class HeaterPlotModel(HasTraits):
     _pwm_series = Dict()  # heater -> [float|None]
     _latest_setpoint = Any(None)  # current PID target (None = no target)
     _setpoint_series = Dict()  # {"setpoint": [float|None]}
+    # A latest value changed since the last sample (the next one bumps
+    # the revision).
+    _has_unsampled_data = Bool(False)
 
     def __lock_default(self):
         return threading.Lock()
@@ -109,30 +120,42 @@ class HeaterPlotModel(HasTraits):
         Ignores empty / unrecognised samples, and everything while disabled."""
         if not sample or not self.enabled:
             return
+
         with self._lock:
             temps = sample.get("temperatures")
+
             if temps:
                 self._latest_temps.update(temps)
+                self._has_unsampled_data = True
+
             heater = sample.get("heater")
+
             if heater is not None:
                 if "pid_temperature" in sample:
                     self._latest_pid[heater] = sample["pid_temperature"]
+                    self._has_unsampled_data = True
+
                 if "pwm_percentage" in sample:
                     self._latest_pwm[heater] = sample["pwm_percentage"]
+                    self._has_unsampled_data = True
 
     def set_setpoint(self, value):
         """Latest PID target for the green setpoint line; None gaps it out
         (PID off / stream stopped)."""
         with self._lock:
-            self._latest_setpoint = value
+            if value != self._latest_setpoint:
+                self._latest_setpoint = value
+                self._has_unsampled_data = True
 
     def drop_pid_series(self):
         """PID stopped: stop holding the closed-loop values so the PID and
         PID-driven PWM lines gap out instead of flatlining at stale values
         (the PWM line resumes from the open-loop command echo)."""
         with self._lock:
-            self._latest_pid.clear()
-            self._latest_pwm.clear()
+            if self._latest_pid or self._latest_pwm:
+                self._latest_pid.clear()
+                self._latest_pwm.clear()
+                self._has_unsampled_data = True
 
     def clear(self):
         """Drop all history and latest values (e.g. on a fresh connection)."""
@@ -147,6 +170,7 @@ class HeaterPlotModel(HasTraits):
             self._pid_series.clear()
             self._pwm_series.clear()
             self._setpoint_series.clear()
+            self._has_unsampled_data = False
             self.revision += 1
 
     def request_clear(self):
@@ -169,12 +193,15 @@ class HeaterPlotModel(HasTraits):
     def sample(self, now):
         """Append one time-aligned point (seconds since the first sample) using
         the current latest values. No-op until at least one value has arrived,
-        so the plot doesn't start with an empty flatline."""
+        so the plot doesn't start with an empty flatline. The revision moves
+        only when a latest value changed since the previous sample."""
         with self._lock:
             if not (self._latest_temps or self._latest_pid or self._latest_pwm):
                 return
+
             if self._t0 is None:
                 self._t0 = now
+
             self._times.append(now - self._t0)
             length = len(self._times)
             self._extend(self._sensor_series, self._latest_temps, length)
@@ -188,7 +215,10 @@ class HeaterPlotModel(HasTraits):
                 length,
             )
             self._trim()
-            self.revision += 1
+
+            if self._has_unsampled_data:
+                self._has_unsampled_data = False
+                self.revision += 1
 
     def snapshot(self):
         """A consistent copy for drawing: ``(times, sensor_series, pid_series,

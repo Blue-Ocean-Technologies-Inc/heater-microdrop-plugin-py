@@ -21,7 +21,14 @@ Built to stay off the GUI's back:
     rebuilt only when the series set changes — never per tick.
   * The timer stops while the widget is hidden (closed / tabbed-behind pane).
   * Ticks early-out while the model is paused, and redraws are skipped
-    entirely when the model's revision hasn't moved (e.g. telemetry stalled).
+    entirely when the model's revision hasn't moved — it moves only when new
+    telemetry was sampled, so redraws follow the telemetry rate (and stop
+    while telemetry is stalled) rather than the timer.
+  * While a protocol runs, redraws are throttled further to
+    PROTOCOL_RUNNING_REDRAW_INTERVAL_MS; sampling keeps its cadence.
+  * No layout engine: one would re-run tight_layout on every draw. The
+    layout is fitted once instead, whenever the legends are rebuilt (series
+    set or theme changed) and on resize.
   * A Clear-plot request (model's ``clear_requested`` counter) is drained
     once per tick: the canvas calls the model's ``clear()`` and lets the
     normal revision-triggered redraw below autoscale the axes to whatever
@@ -53,6 +60,7 @@ from .consts import (
     LIGHT_PLOT_BG,
     PID_SERIES_PREFIX,
     PLOT_UPDATE_INTERVAL_MS,
+    PROTOCOL_RUNNING_REDRAW_INTERVAL_MS,
     PWM_SERIES_PREFIX,
     SENSOR_PALETTE,
     SENSOR_SERIES_PREFIX,
@@ -83,7 +91,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
 
     def __init__(self, model, parent=None):
         self._model = model
-        self._figure = Figure(figsize=(6, 5), tight_layout=True)
+        self._figure = Figure(figsize=(6, 5))
         super().__init__(self._figure)
         self.setParent(parent)
 
@@ -99,6 +107,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._legend_entry_to_key = {}
 
         self._drawn_revision = None
+        self._ticks_since_redraw = 0
         self._drained_clear_requested = model.clear_requested
         self._theme = None
         self._apply_theme()
@@ -126,19 +135,41 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._tick()  # catch up immediately on reveal
         super().showEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit_layout()
+
     # ------------------------------------------------------------------ #
     def _tick(self):
         if self._model.paused:
             return
+
+        self._ticks_since_redraw += 1
+
         if self._model.clear_requested != self._drained_clear_requested:
             self._drained_clear_requested = self._model.clear_requested
             self._model.clear()
+
         if self._model.enabled:
             self._model.sample(time.monotonic())
+
         theme_changed = self._apply_theme()
-        if theme_changed or self._model.revision != self._drawn_revision:
+        data_changed = self._model.revision != self._drawn_revision
+
+        if theme_changed or (data_changed and self._redraw_due()):
             self._drawn_revision = self._model.revision
+            self._ticks_since_redraw = 0
             self._redraw()
+
+    def _redraw_due(self):
+        """Throttle redraws while a protocol runs. Counts ticks rather than
+        wall time, so timer jitter cannot stretch the interval by a tick."""
+        if not self._model.protocol_running:
+            return True
+
+        elapsed_ms = self._ticks_since_redraw * PLOT_UPDATE_INTERVAL_MS
+
+        return elapsed_ms >= PROTOCOL_RUNNING_REDRAW_INTERVAL_MS
 
     def _redraw(self):
         times, sensors, pids, pwms, setpoints = self._model.snapshot()
@@ -195,7 +226,16 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._pwm_ax.relim(visible_only=True)
         self._pwm_ax.autoscale_view(scaley=False)  # y stays fixed -5..105
 
+        # The outside-right legends set the right margin, so refit with
+        # them — after autoscaling, so the new tick labels count too.
+        if changed:
+            self._fit_layout()
+
         self.draw_idle()
+
+    def _fit_layout(self):
+        """Fit the margins once (titles, labels, outside legends)."""
+        self._figure.tight_layout()
 
     def _update_lines(
         self, ax, line_map, times, series, palette, linestyle, key_prefix, label_fn
@@ -333,6 +373,8 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         )
         self._pwm_ax.set_ylim(-5, 105)
         self._rebuild_legends()
+        self._fit_layout()
+
         return True
 
     @staticmethod

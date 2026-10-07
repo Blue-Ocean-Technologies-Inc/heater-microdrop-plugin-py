@@ -43,6 +43,9 @@ LOG_TIME_DISPLAY_FORMAT = "%Y-%m-%d %H:%M:%S"
 # live view without unbounded memory growth).
 MAX_PLOT_POINTS = 500
 PLOT_UPDATE_INTERVAL_MS = 500
+# While a protocol runs the GUI is busiest, so the canvas redraws no faster
+# than this (sampling keeps the cadence above, so the window is unchanged).
+PROTOCOL_RUNNING_REDRAW_INTERVAL_MS = 1000
 
 # Role prefixes namespacing the toggleable series keys (a heater's PID and PWM
 # series share the heater name, so bare names would collide in hidden_series).

@@ -41,8 +41,10 @@ logger = get_logger(__name__)
 
 class HeaterPlotMessageHandler(BaseMessageHandler):
     """Feeds the plot model: telemetry samples, PID-target changes, and the
-    commanded open-loop duty. The inherited connected / disconnected /
-    realtime handlers never fire here — this listener's topics only."""
+    commanded open-loop duty. Of the inherited handlers only
+    protocol_running fires here (it sets the model's ``protocol_running``);
+    connected / disconnected / realtime are not among this listener's
+    topics."""
 
     model = Instance(HeaterPlotModel)
 
@@ -52,8 +54,9 @@ class HeaterPlotMessageHandler(BaseMessageHandler):
 
     def _on_data_log_saved_triggered(self, body):
         """A telemetry log finished writing (body = its path): show it in
-        the Log Viewer tab. Marshalled onto the GUI thread — this fires on
-        a dramatiq worker, and the trait drives folder scanning + Qt."""
+        the Log Viewer tab. Not marshalled: this fires the Event on the
+        dramatiq worker thread, and the Log Viewer controller's observer
+        (folder scan + selection) runs there too."""
         if self.log_viewer_model is None or not body:
             return
         self.log_viewer_model.saved_log_path = str(body)
