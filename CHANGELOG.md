@@ -1,3 +1,9 @@
+## [v1.10.4](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.4) (2026-10-07)
+
+### Fix
+
+- **protocol-controls**: repaint setpoint cells on Set Temp ([`374c5c7`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/374c5c78f28983a1d7a8941868dbf768f5a38c95))
+
 ## [v1.10.3](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.3) (2026-10-06)
 
 ### Fix
