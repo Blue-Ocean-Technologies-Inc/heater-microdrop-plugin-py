@@ -54,6 +54,16 @@ PID_SERIES_PREFIX = "pid:"
 PWM_SERIES_PREFIX = "pwm:"
 SETPOINT_SERIES_PREFIX = "target:"
 
+# Live-view plot selector (unlabelled dropdown, top centre of the toolbar
+# row): which of the two stacked plots to show. Listed in dropdown order.
+PLOT_SELECTION_TEMP = "Temp"
+PLOT_SELECTION_POWER = "Power"
+PLOT_SELECTION_BOTH = "Both"
+PLOT_SELECTIONS = (PLOT_SELECTION_TEMP, PLOT_SELECTION_POWER, PLOT_SELECTION_BOTH)
+PLOT_SELECTION_TOOLTIP = "Choose which live plots to show."
+# Characters the selector always has room for (fits the longest option).
+PLOT_SELECTOR_MIN_CONTENTS_LENGTH = 6
+
 # Legend entries for hidden series stay visible but dimmed to this alpha.
 HIDDEN_LEGEND_ENTRY_ALPHA = 0.25
 
