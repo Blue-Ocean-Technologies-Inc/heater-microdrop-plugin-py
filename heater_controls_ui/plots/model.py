@@ -31,6 +31,8 @@ The plot's run state also lives here so the view stays dumb:
   all while telemetry is stalled) rather than on every timer tick.
 * ``protocol_running`` — mirrors PROTOCOL_RUNNING (set by the listener's
   inherited handler); the canvas throttles its redraws while it is True.
+* ``plot_selection`` — which plots the live view shows (Temp / Power /
+  Both); the canvas re-lays its axes when it changes.
 * ``clear_requested`` — bumped by the view (:meth:`request_clear`) to ask for
   a view-only purge of the buffered/plotted points. Telemetry keeps arriving
   and nothing upstream is touched; the canvas drains the request on its next
@@ -42,10 +44,21 @@ The plot's run state also lives here so the view stays dumb:
 import threading
 
 # Enthought library imports.
-from traits.api import Any, Bool, Dict, HasTraits, Instance, Int, List, Set, observe
+from traits.api import (
+    Any,
+    Bool,
+    Dict,
+    Enum,
+    HasTraits,
+    Instance,
+    Int,
+    List,
+    Set,
+    observe,
+)
 
 # Local imports.
-from .consts import MAX_PLOT_POINTS
+from .consts import MAX_PLOT_POINTS, PLOT_SELECTION_BOTH, PLOT_SELECTIONS
 
 
 class HeaterPlotModel(HasTraits):
@@ -83,6 +96,8 @@ class HeaterPlotModel(HasTraits):
         "purge of the buffered/plotted points; "
         "drained by the canvas on its next tick.",
     )
+    #: Which live plots the canvas shows: Temp, Power, or Both stacked.
+    plot_selection = Enum(PLOT_SELECTION_BOTH, PLOT_SELECTIONS)
 
     # ------------------------------------------------------------------ #
     # Buffers (all access under _lock)                                     #

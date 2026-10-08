@@ -13,23 +13,26 @@
 A lean pyface DockPane with two tabs: the live matplotlib canvas and the
 static log viewer (a TraitsUI subpanel, see log_view). It owns the plot
 model and its own telemetry listener, so it needs nothing from the status
-pane. The Pause / Stop / Clear buttons only flip model traits (paused /
-enabled / clear_requested) — the canvas reads those on its timer, keeping
+pane. The Pause / Stop / Clear buttons and the plot selector only flip model
+traits (paused / enabled / clear_requested / plot_selection) — the canvas
+reads those on its timer, keeping
 the model/view separation intact.
 """
 
 # Third-party imports.
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (
+
+# Enthought library imports.
+from pyface.qt.QtGui import QFont
+from pyface.qt.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
+    QSizePolicy,
     QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
-
-# Enthought library imports.
 from pyface.tasks.dock_pane import DockPane
 from traits.api import Any, Instance
 
@@ -50,6 +53,9 @@ from .consts import (
     PAUSE_PLOT_TOOLTIP,
     PLOT_DOCK_PANE_ID,
     PLOT_DOCK_PANE_NAME,
+    PLOT_SELECTION_TOOLTIP,
+    PLOT_SELECTIONS,
+    PLOT_SELECTOR_MIN_CONTENTS_LENGTH,
     RESUME_PLOT_TOOLTIP,
     START_PLOT_TOOLTIP,
     STOP_PLOT_TOOLTIP,
@@ -111,23 +117,43 @@ class HeaterPlotDockPane(DockPane):
         layout.setContentsMargins(0, 0, 0, 0)
         self._canvas = HeaterPlotCanvas(self.model, parent=container)
 
-        # Pan / zoom / save-image toolbar plus the pause / clear / stop
-        # controls.
-        toolbar_row = QHBoxLayout()
-        toolbar_row.addWidget(NavigationToolbar2QT(self._canvas, container))
-        toolbar_row.addStretch(1)
+        # Pan / zoom / save-image toolbar on the left, the plot selector in
+        # the centre, the pause / clear / stop controls on the right. Equal
+        # stretch on both sides keeps the selector centred.
+        left_row = QHBoxLayout()
+        left_row.addWidget(NavigationToolbar2QT(self._canvas, container))
+        left_row.addStretch(1)
+
+        plot_selector = QComboBox(container)
+        plot_selector.addItems(PLOT_SELECTIONS)
+        plot_selector.setCurrentText(self.model.plot_selection)
+        plot_selector.setToolTip(PLOT_SELECTION_TOOLTIP)
+        # Hold the width of the longest option: the stretches on either side
+        # would otherwise squeeze it down to an elided "...".
+        plot_selector.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        plot_selector.setMinimumContentsLength(PLOT_SELECTOR_MIN_CONTENTS_LENGTH)
+        plot_selector.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        plot_selector.currentTextChanged.connect(self._on_plot_selection_changed)
+
+        right_row = QHBoxLayout()
+        right_row.addStretch(1)
         self._pause_button = self._make_toggle_button(
             container, ICON_PAUSE, PAUSE_PLOT_TOOLTIP, self._on_pause_toggled
         )
-        toolbar_row.addWidget(self._pause_button)
+        right_row.addWidget(self._pause_button)
         self._clear_button = self._make_action_button(
             container, CLEAR_PLOT_ICON, CLEAR_PLOT_TOOLTIP, self._on_clear_clicked
         )
-        toolbar_row.addWidget(self._clear_button)
+        right_row.addWidget(self._clear_button)
         self._stop_button = self._make_toggle_button(
             container, ICON_STOP, STOP_PLOT_TOOLTIP, self._on_stop_toggled
         )
-        toolbar_row.addWidget(self._stop_button)
+        right_row.addWidget(self._stop_button)
+
+        toolbar_row = QHBoxLayout()
+        toolbar_row.addLayout(left_row, 1)
+        toolbar_row.addWidget(plot_selector, 0)
+        toolbar_row.addLayout(right_row, 1)
 
         layout.addLayout(toolbar_row)
         layout.addWidget(self._canvas)
@@ -153,7 +179,7 @@ class HeaterPlotDockPane(DockPane):
         super().destroy()
 
     # ------------------------------------------------------------------ #
-    # Pause / Clear / Stop (view -> model traits; the canvas polls them)   #
+    # Pause / Clear / Stop / plot selection (view -> model traits)       #
     # ------------------------------------------------------------------ #
     @staticmethod
     def _make_toggle_button(parent, glyph, tooltip, on_toggled):
@@ -208,6 +234,11 @@ class HeaterPlotDockPane(DockPane):
         self._clear_button.setEnabled(
             not checked and not self._pause_button.isChecked()
         )
+
+    def _on_plot_selection_changed(self, selection):
+        self.model.plot_selection = selection
+        # The canvas would pick it up on its next tick; re-lay it out now.
+        self._canvas.apply_plot_selection()
 
     def _on_clear_clicked(self):
         # View-only purge: flip a model trait, the canvas drains it on its

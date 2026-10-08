@@ -35,6 +35,10 @@ Built to stay off the GUI's back:
     (post-clear) data is on the next snapshot.
   * Legend entries are clickable: a pick toggles the series in the model's
     ``hidden_series`` and hidden lines cost nothing to draw.
+  * The model's ``plot_selection`` picks Temp, Power, or Both: a single
+    plot takes the whole figure and the other axes is hidden (its lines
+    keep updating, so switching back shows current data at once). A
+    selection change refits the layout once, like a series-set change.
 """
 
 # Standard library imports.
@@ -59,6 +63,9 @@ from .consts import (
     HIDDEN_LEGEND_ENTRY_ALPHA,
     LIGHT_PLOT_BG,
     PID_SERIES_PREFIX,
+    PLOT_SELECTION_BOTH,
+    PLOT_SELECTION_POWER,
+    PLOT_SELECTION_TEMP,
     PLOT_UPDATE_INTERVAL_MS,
     PROTOCOL_RUNNING_REDRAW_INTERVAL_MS,
     PWM_SERIES_PREFIX,
@@ -95,8 +102,12 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         super().__init__(self._figure)
         self.setParent(parent)
 
-        self._temp_ax = self._figure.add_subplot(211)
-        self._pwm_ax = self._figure.add_subplot(212)
+        # Both: temperature stacked over PWM. Temp / Power: the chosen axes
+        # alone in a single cell (both share it; the other is hidden).
+        self._stacked_grid = self._figure.add_gridspec(2, 1)
+        self._single_grid = self._figure.add_gridspec(1, 1)
+        self._temp_ax = self._figure.add_subplot(self._stacked_grid[0])
+        self._pwm_ax = self._figure.add_subplot(self._stacked_grid[1])
 
         # Persistent artists: role-prefixed series key -> Line2D.
         self._sensor_lines = {}
@@ -110,7 +121,9 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
         self._ticks_since_redraw = 0
         self._drained_clear_requested = model.clear_requested
         self._theme = None
+        self._drawn_plot_selection = None
         self._apply_theme()
+        self.apply_plot_selection()
         self.mpl_connect("pick_event", self._on_legend_pick)
 
         self._timer = QTimer(self)
@@ -141,6 +154,9 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
 
     # ------------------------------------------------------------------ #
     def _tick(self):
+        # Layout follows the selection even while paused.
+        self.apply_plot_selection()
+
         if self._model.paused:
             return
 
@@ -233,6 +249,32 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
 
         self.draw_idle()
 
+    def apply_plot_selection(self):
+        """Lay the axes out for the model's ``plot_selection`` when it moved:
+        Both stacks the two plots, Temp / Power gives the chosen one the
+        whole figure and hides the other."""
+        selection = self._model.plot_selection
+
+        if selection == self._drawn_plot_selection:
+            return
+
+        self._drawn_plot_selection = selection
+
+        if selection == PLOT_SELECTION_BOTH:
+            self._temp_ax.set_subplotspec(self._stacked_grid[0])
+            self._pwm_ax.set_subplotspec(self._stacked_grid[1])
+        else:
+            self._temp_ax.set_subplotspec(self._single_grid[0])
+            self._pwm_ax.set_subplotspec(self._single_grid[0])
+
+        self._temp_ax.set_visible(selection != PLOT_SELECTION_POWER)
+        self._pwm_ax.set_visible(selection != PLOT_SELECTION_TEMP)
+        # Alone, the temperature plot carries the time label PWM normally shows.
+        self._temp_ax.xaxis.label.set_visible(selection == PLOT_SELECTION_TEMP)
+
+        self._fit_layout()
+        self.draw_idle()
+
     def _fit_layout(self):
         """Fit the margins once (titles, labels, outside legends)."""
         self._figure.tight_layout()
@@ -312,8 +354,11 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
 
     def _on_legend_pick(self, event):
         key = self._legend_entry_to_key.get(event.artist)
-        if key is None:
+
+        # A hidden plot's legend shares the visible one's spot; ignore it.
+        if key is None or not event.artist.axes.get_visible():
             return
+
         hidden = self._model.hidden_series
         if key in hidden:
             hidden.discard(key)
@@ -366,7 +411,7 @@ class HeaterPlotCanvas(FigureCanvasQTAgg):
             bg,
             text,
             grid,
-            xlabel=None,
+            xlabel="Time (s)",  # shown only when Temp is plotted alone
         )
         self._style_axis(
             self._pwm_ax, "Heater PWM", "PWM (%)", bg, text, grid, xlabel="Time (s)"
