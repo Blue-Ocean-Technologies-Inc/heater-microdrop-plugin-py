@@ -1,3 +1,9 @@
+## [v1.11.0](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.11.0) (2026-10-08)
+
+### Feat
+
+- **plots**: Temp / Power / Both selector for the live view ([`e3d1ba7`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/e3d1ba7a577597c717e66031589cd0533078856b))
+
 ## [v1.10.5](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.10.5) (2026-10-07)
 
 ### Perf
