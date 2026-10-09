@@ -14,7 +14,9 @@ as one timestamped JSON line to a file under the current experiment's
 ``heater_logs`` folder; a fresh file starts on every stream OFF -> ON
 transition (run-mode changes mid-stream keep the same file), and an open
 log rolls over into the new experiment's folder when the experiment
-changes mid-stream.
+changes mid-stream. A lost serial port only suspends the run: the logger
+stays armed and the first packet after a reconnect resumes it in a fresh
+file (#42).
 """
 
 # Standard library imports.
@@ -26,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Enthought library imports.
-from traits.api import Float, HasTraits, Instance
+from traits.api import Bool, Float, HasTraits, Instance
 
 # Microdrop package imports.
 from microdrop_application.helpers import get_current_experiment_directory
@@ -58,6 +60,10 @@ class HeaterDataLogger(HasTraits):
     serialized behind one lock.
     """
 
+    #: True from start_new_log until an explicit stop; a port loss only
+    #: suspends.
+    armed = Bool(False)
+
     #: Open file handle of the active log, or None while not logging.
     _log_file = Instance(io.IOBase)
 
@@ -82,9 +88,10 @@ class HeaterDataLogger(HasTraits):
             return self._log_file is not None
 
     def start_new_log(self, log_dir):
-        """Close any active log and start a fresh timestamped file in
-        ``log_dir`` (created if needed)."""
+        """Arm the logger, close any active log and start a fresh
+        timestamped file in ``log_dir`` (created if needed)."""
         with self._lock:
+            self.armed = True
             self._close_locked()
             self._open_locked(Path(log_dir))
 
@@ -132,26 +139,76 @@ class HeaterDataLogger(HasTraits):
         ``timestamp`` (mirrors the legacy DataLogger.log_data). Some
         firmware frames carry their OWN ``timestamp`` (board uptime
         seconds) — that moves to ``board_timestamp`` so it can't clobber
-        the wall clock the viewer's timeline needs. No-op while no log is
-        active."""
+        the wall clock the viewer's timeline needs. A suspended (armed but
+        closed) log is reopened first; no-op while not armed."""
         record = dict(packet)
+
         if "timestamp" in record:
             record["board_timestamp"] = record.pop("timestamp")
+
         record = {"timestamp": datetime.now().isoformat(), **record}
+
         with self._lock:
             if self._log_file is None:
+                self._resume_locked()
+
+            if self._log_file is None:
                 return
+
             try:
                 self._log_file.write(json.dumps(record) + "\n")
                 self._log_file.flush()
             except OSError as e:
+                # A failing file ends the run's logging (disarm) rather than
+                # reopening a new file every interval while the disk errors.
                 logger.warning(f"Heater data log write failed: {e}")
+                self.armed = False
                 self._close_locked()
 
-    def stop(self):
-        """Close the active log (no-op when none is active)."""
+    def suspend(self):
+        """Close the active log but stay armed: no more telemetry can arrive
+        on this port, and the next packet (after a reconnect) resumes the
+        run in a fresh file."""
         with self._lock:
             self._close_locked()
+            # Let the first packet after a reconnect resume at once rather
+            # than wait out a throttle window from the old port.
+            self._next_experiment_check = 0.0
+
+    def stop(self):
+        """Disarm and close the active log (no-op when none is active).
+        Disarming under the lock means a telemetry frame that arrives after
+        the stop can never reopen the log."""
+        with self._lock:
+            self.armed = False
+            self._close_locked()
+
+    def _resume_locked(self):
+        """Reopen a suspended log in the current experiment's heater_logs
+        folder. No-op unless armed; throttled to one directory lookup per
+        EXPERIMENT_CHECK_INTERVAL_S, so an unresolvable experiment costs one
+        warning per interval and the stream keeps running unlogged."""
+        now = time.monotonic()
+
+        if not self.armed or now < self._next_experiment_check:
+            return
+
+        self._next_experiment_check = now + EXPERIMENT_CHECK_INTERVAL_S
+
+        try:
+            log_dir = current_heater_logs_directory()
+        except Exception as e:
+            logger.warning(
+                f"No experiment directory to resume the heater data log; "
+                f"telemetry not logged: {e}"
+            )
+
+            return
+
+        self._open_locked(log_dir)
+
+        if self._log_file is not None:
+            logger.info(f"Heater data log resumed: {self._log_file.name}")
 
     def _open_locked(self, log_dir):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
