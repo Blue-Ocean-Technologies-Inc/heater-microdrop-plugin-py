@@ -235,8 +235,10 @@ class HeaterSerialProxy:
         except Exception as e:
             logger.error(f"Heater serial reader crashed: {e}", exc_info=True)
         finally:
-            # No more telemetry can arrive — flush out any active data log.
-            heater_data_logger.stop()
+            # No more telemetry can arrive on this port — close the data log
+            # but keep the run armed: a USB drop must not forget the run,
+            # so the first packet after a reconnect resumes logging (#42).
+            heater_data_logger.suspend()
             logger.debug("Heater serial reader thread terminated")
 
     # ------------------------------------------------------------------
@@ -421,7 +423,11 @@ class HeaterSerialProxy:
     def terminate(self):
         """Stop the reader thread and close the port. Intentional shutdown — does
         not publish the disconnected signal."""
-        heater_data_logger.stop()
+        # Suspend, not stop: the device monitor tears the proxy down on a
+        # disconnect (and the wrong-board WHOAMI guard / config push release
+        # the port), none of which ends the run — a reconnect resumes the
+        # log. On app shutdown the armed flag simply dies with the process.
+        heater_data_logger.suspend()
         self._stop_reader.set()
         # The wrong-board WHOAMI guard calls terminate() from the reader
         # thread itself, which must not join itself.

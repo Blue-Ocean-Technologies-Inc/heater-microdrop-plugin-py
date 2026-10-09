@@ -159,6 +159,9 @@ class HeaterCommandSetterService(HasTraits):
         self._pid_active = False
         if data.all_off:
             self._send("all_off")
+        # stop() (not suspend) ends the run: it disarms under the logger's
+        # lock, so a late telemetry frame still in flight after stream_stop
+        # finds the logger disarmed and cannot reopen a file.
         heater_data_logger.stop()
 
     # ------------------------------------------------------------------
@@ -193,24 +196,29 @@ class HeaterCommandSetterService(HasTraits):
     def _start_data_log(self):
         """Start a telemetry log for the stream just started, under the
         current experiment's heater_logs folder. Only a real stream
-        OFF -> ON transition starts a file: an open log means the stream
-        was already running (run-mode changes mid-stream — PID on/off
-        flips, sensor-group restarts — also arrive as start_stream) and
-        keeps collecting into the same file; stop/all_off/disconnect
-        closing the log is what marks the stream as off. Never blocks the
-        stream itself — with no reachable experiment directory (e.g.
-        no-Redis test runs) the stream simply runs unlogged. An experiment
-        change mid-stream is followed by the logger itself
+        OFF -> ON transition starts a file: an armed logger means the
+        stream was already running (run-mode changes mid-stream — PID
+        on/off flips, sensor-group restarts — also arrive as start_stream)
+        and keeps collecting into the same file, or — when a USB drop
+        suspended it — resumes in a fresh one on the next packet; only
+        stop/all_off disarming the logger marks the stream as off. Never
+        blocks the stream itself — with no reachable experiment directory
+        (e.g. no-Redis test runs) the stream simply runs unlogged. An
+        experiment change mid-stream is followed by the logger itself
         (``HeaterDataLogger.follow_experiment``)."""
-        if heater_data_logger.is_active:
+
+        if heater_data_logger.armed:
             return
+
         try:
             log_dir = current_heater_logs_directory()
         except Exception as e:
             logger.warning(
                 f"No experiment directory for heater logs; telemetry not logged: {e}"
             )
+
             return
+
         heater_data_logger.start_new_log(log_dir)
 
     @staticmethod
