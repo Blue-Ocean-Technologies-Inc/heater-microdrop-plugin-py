@@ -1,3 +1,9 @@
+## [v1.11.1](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.11.1) (2026-10-09)
+
+### Fix
+
+- **logger**: resume heater data log after a USB reconnect ([`1c77e32`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/1c77e32013b8a796e3f611ac737f5194a72edcc1))
+
 ## [v1.11.0](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.11.0) (2026-10-08)
 
 ### Feat
