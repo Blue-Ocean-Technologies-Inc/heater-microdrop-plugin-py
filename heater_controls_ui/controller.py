@@ -155,7 +155,11 @@ class HeaterControlsController(BaseStatusController):
                 f"Temperature setpoint {event.new} °C staged (stream off or "
                 f"pid mode disabled)"
             )
-            self.model.stream_off_edit_warning = True
+
+            # A step-selection follow must not pop the "applies when
+            # streaming starts" dialog on every step click.
+            if not self.model.following_step:
+                self.model.stream_off_edit_warning = True
 
     @observe("model:pwm")
     def _on_pwm_changed(self, event):

@@ -75,6 +75,13 @@ CONFIG_ERROR_PREFIX = "<<<CONFIG_ERROR"
 # sensor name->ROM entries (so they can never be used as a sensor name).
 OW_RESERVED_KEYS = frozenset({"pin", "conv_mode", "resolution"})
 
+#: Field ids of the heater temperature compound protocol column — the Set Temp
+#: checkbox and the target setpoint. Shared here (the bottom layer) because
+#: both the column and the controls pane, which follows the selected step's
+#: target from PROTOCOL_TREE_ROW_SELECTED cells, read them.
+SET_TEMPERATURE_FIELD_ID = "set_temperature"
+TARGET_TEMPERATURE_FIELD_ID = "target_temperature_c"
+
 # Topics published by this plugin (signals)
 CONNECTED = connected_topic(DEVICE_NAME)
 DISCONNECTED = disconnected_topic(DEVICE_NAME)
