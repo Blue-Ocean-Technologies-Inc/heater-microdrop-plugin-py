@@ -20,8 +20,13 @@ from heater_controller.consts import (
     FIRMWARE_UPLOAD_FINISHED,
     FIRMWARE_UPLOAD_LOG,
     FIRMWARE_UPLOAD_STARTED,
+    SET_TEMPERATURE_FIELD_ID,
+    TARGET_TEMPERATURE_FIELD_ID,
 )
 from template_status_and_controls.base_message_handler import BaseMessageHandler
+from template_status_and_controls.step_setpoint_follow import (
+    StepSetpointFollowMixin,
+)
 
 # Local imports.
 from .consts import PWM_MAX, PWM_MIN
@@ -39,16 +44,28 @@ logger = get_logger(__name__)
 HALTING_ERR_KINDS = ("overtemp", "task_crash", "sensor_fail")
 
 
-class HeaterMessageHandler(BaseMessageHandler):
+class HeaterMessageHandler(StepSetpointFollowMixin, BaseMessageHandler):
     """Dramatiq message handler for the heater UI.
 
-    Inherits the common connected / disconnected handlers from BaseMessageHandler.
-    Adds heater-specific handlers for the available-heaters list and telemetry.
+    Inherits the common connected / disconnected and protocol_running handlers
+    from BaseMessageHandler, and the selected step's temperature follow
+    (row_selected) from StepSetpointFollowMixin. Adds heater-specific handlers
+    for the available-heaters list and telemetry.
     """
 
     model = Instance(HeaterStatusModel)
     # Shared with the Configure Sensors & Heaters dialog (owned by the dock pane).
     config_model = Instance(SensorConfigModel)
+
+    def _step_setpoints(self, cells):
+        """The step's target temperature, only when its Set Temp box is
+        checked — unchecked, the step leaves the heater untouched (the
+        column handler's gate), so the pane is left alone too."""
+
+        if not cells.get(SET_TEMPERATURE_FIELD_ID):
+            return {}
+
+        return {"temperature": cells.get(TARGET_TEMPERATURE_FIELD_ID)}
 
     def _on_connected_triggered(self, body):
         """Base handler flips the connected flag; also ferry the board's

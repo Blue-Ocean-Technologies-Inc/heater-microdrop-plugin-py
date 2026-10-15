@@ -22,6 +22,7 @@ from heater_controller.consts import (  # noqa: F401 (re-export)
     TELEMETRY,
 )
 from microdrop_application.consts import ADVANCED_MODE_CHANGE
+from pluggable_protocol_tree.consts import PROTOCOL_TREE_ROW_SELECTED
 
 # Microdrop style imports.
 from microdrop_style.colors import ERROR_COLOR, GREY, SUCCESS_COLOR
@@ -36,13 +37,21 @@ plot_listener_name = f"{PKG}_plot_listener"
 # Main listener subscribes to all heater signals (connected/disconnected,
 # heaters_available, telemetry) plus the Advanced Mode toggle (compensation is
 # advanced-only: the message handler force-clears the use-compensation
-# preference when Advanced Mode turns off); the plot listener taps telemetry
+# preference when Advanced Mode turns off), the protocol tree's row selection
+# (the pane follows the selected step's target temperature) and the protocol
+# run state (following stops while the executor owns the steps); the plot
+# listener taps telemetry
 # plus the COMMANDED values (requests published by the controls pane) — the
 # PID target for the green setpoint line and the open-loop duty echo, neither
 # of which appears in telemetry — plus the saved-log signal that auto-updates
 # the Log Viewer tab, and the protocol run state that throttles live redraws.
 ACTOR_TOPIC_DICT = {
-    listener_name: [f"{DEVICE_NAME}/signals/#", ADVANCED_MODE_CHANGE],
+    listener_name: [
+        f"{DEVICE_NAME}/signals/#",
+        ADVANCED_MODE_CHANGE,
+        PROTOCOL_TREE_ROW_SELECTED,
+        PROTOCOL_RUNNING,
+    ],
     plot_listener_name: [
         TELEMETRY,
         DATA_LOG_SAVED,

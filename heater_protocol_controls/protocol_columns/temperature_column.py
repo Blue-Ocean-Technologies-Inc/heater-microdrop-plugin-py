@@ -56,7 +56,7 @@ from pluggable_protocol_tree.views.columns.spinbox import DoubleSpinBoxColumnVie
 from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 
 # Local imports.
-from ..consts import SET_TEMPERATURE_FIELD_ID
+from ..consts import SET_TEMPERATURE_FIELD_ID, TARGET_TEMPERATURE_FIELD_ID
 
 # Sensible defaults / spinbox ranges (mirror the heater UI's setpoint range).
 TARGET_DEFAULT = 40.0
@@ -74,14 +74,14 @@ class TemperatureCompoundModel(BaseCompoundColumnModel):
     def field_specs(self):
         return [
             FieldSpec(SET_TEMPERATURE_FIELD_ID, "Set Temp", False),
-            FieldSpec("target_temperature_c", "Target Temp (°C)", TARGET_DEFAULT),
+            FieldSpec(TARGET_TEMPERATURE_FIELD_ID, "Target Temp (°C)", TARGET_DEFAULT),
             FieldSpec("tolerance_c", "Tolerance (°C)", TOLERANCE_DEFAULT),
         ]
 
     def trait_for_field(self, field_id):
         if field_id == SET_TEMPERATURE_FIELD_ID:
             return Bool(False)
-        if field_id == "target_temperature_c":
+        if field_id == TARGET_TEMPERATURE_FIELD_ID:
             return Float(TARGET_DEFAULT)
         if field_id == "tolerance_c":
             return Float(TOLERANCE_DEFAULT)
@@ -237,7 +237,7 @@ def make_temperature_column():
         view=DictCompoundColumnView(
             cell_views={
                 SET_TEMPERATURE_FIELD_ID: CheckboxColumnView(),
-                "target_temperature_c": TemperatureSetpointSpinBoxView(
+                TARGET_TEMPERATURE_FIELD_ID: TemperatureSetpointSpinBoxView(
                     low=TARGET_MIN, high=TARGET_MAX, decimals=1, single_step=1.0
                 ),
                 "tolerance_c": TemperatureSetpointSpinBoxView(
