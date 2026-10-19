@@ -74,12 +74,15 @@ def test_no_op_unless_checked_and_advanced(node, monkeypatch):
     assert compensate_setpoint_from_preferences(50.0) == 50.0
 
 
-def test_a_quadratic_preference_compensates(node):
-    _store(QUADRATIC)
+@pytest.mark.parametrize(
+    "text", [QUADRATIC, "actual = 1.04·expected^2/100 + 0.9·expected + 1.2"]
+)
+def test_a_quadratic_preference_compensates(node, text):
+    _store(text)
     assert compensate_setpoint_from_preferences(50.0) == 72.2
 
 
-@pytest.mark.parametrize("text", ["2*a*x", "expected = 0.96*actual - 1.1"])
+@pytest.mark.parametrize("text", ["2*a*x", "expected = 0.96*actual - 1.1", "1.2"])
 def test_an_unparsable_preference_sends_the_base_and_logs_once(node, caplog, text):
     _store(text)
     assert compensate_setpoint_from_preferences(50.0) == 50.0
@@ -110,7 +113,7 @@ def test_an_out_of_range_result_is_clamped_with_a_warning(
     assert compensate_setpoint_from_preferences(50.0) == clamped
     warning = next(r for r in caplog.records if r.levelname == "WARNING")
     assert compensated in warning.getMessage()
-    assert str(clamped) in warning.getMessage()
+    assert f"sending {float(clamped)} °C" in warning.getMessage()
 
 
 PATH = "microdrop.peripheral_settings"
