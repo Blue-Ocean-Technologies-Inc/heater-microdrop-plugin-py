@@ -42,6 +42,10 @@ BOARD_BAUDRATE = 115200
 # HEATERS_AVAILABLE so a frontend can offer a selection dropdown.
 DEFAULT_HEATER = "tec1"
 
+# Setpoint range (°C): the controls' spinbox bounds, and the range a
+# compensated setpoint is clamped to (see compensation.py).
+TEMPERATURE_MIN, TEMPERATURE_MAX = 0, 150
+
 # Temperature-compensation defaults + spinner ranges (ports of the legacy
 # standalone UI's compensation controls): the compensated PID setpoint is
 # round(base * rate + offset, 2). See heater_controller/compensation.py.

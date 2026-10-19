@@ -20,6 +20,8 @@ from heater_controller.consts import (  # noqa: F401 (re-export)
     START_STREAM,
     STOP_STREAM,
     TELEMETRY,
+    TEMPERATURE_MAX,
+    TEMPERATURE_MIN,
 )
 from microdrop_application.consts import ADVANCED_MODE_CHANGE
 
@@ -54,8 +56,9 @@ ACTOR_TOPIC_DICT = {
     ],
 }
 
-# Setpoint ranges (units shown in the spinbox suffix).
-TEMPERATURE_MIN, TEMPERATURE_MAX, TEMPERATURE_DEFAULT = 0, 150, 40
+# Setpoint ranges (units shown in the spinbox suffix). The temperature range
+# lives in heater_controller.consts, where compensation clamps to it.
+TEMPERATURE_DEFAULT = 40
 PWM_MIN, PWM_MAX, PWM_DEFAULT = 0, 100, 0
 
 # Status colors. The heater has no chip/"no device" sub-state, so connected maps
