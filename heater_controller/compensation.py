@@ -47,7 +47,12 @@ from microdrop_application.menus import is_advanced_mode
 from microdrop_utils.expression import FitExpressionError, is_identity, parse_function
 
 # Local imports.
-from .consts import TEMPERATURE_MAX, TEMPERATURE_MIN
+from .consts import (
+    LEGACY_COMPENSATION_OFFSET_KEY,
+    LEGACY_COMPENSATION_RATE_KEY,
+    TEMPERATURE_MAX,
+    TEMPERATURE_MIN,
+)
 
 # Logger import.
 from logger.logger_service import get_logger
@@ -80,6 +85,64 @@ class HeaterCompensationPreferences(PreferencesHelper):
         desc="setpoint sent = f(base), written as actual = f(expected) — the "
         "Actual vs expected trend",
     )
+
+    def __init__(self, **traits):
+        super().__init__(**traits)
+
+        self._migrate_linear_compensation()
+
+    def _migrate_linear_compensation(self):
+        """Seed the expression once from the legacy rate/offset preferences.
+
+        Never raises: the helper is constructed on every setpoint send. The
+        seeded assignment writes the expression key, so this runs only until
+        the first non-identity migration. The legacy keys stay in the node.
+        """
+        if self.preferences is None:
+            return
+
+        path = self.preferences_path
+        keys = self.preferences.keys(path)
+
+        if "heater_compensation_expression" in keys:
+            return
+
+        legacy_defaults = {
+            LEGACY_COMPENSATION_RATE_KEY: 1.0,
+            LEGACY_COMPENSATION_OFFSET_KEY: 0.0,
+        }
+
+        if not legacy_defaults.keys() & set(keys):
+            return
+
+        values = {}
+
+        for key, default in legacy_defaults.items():
+            value = self.preferences.get(f"{path}.{key}", default)
+
+            try:
+                values[key] = float(value)
+            except (TypeError, ValueError):
+                logger.warning(
+                    f"Ignoring unreadable heater compensation preference {key} = "
+                    f'"{value}"; leaving the compensation expression as "x"'
+                )
+
+                return
+
+        rate = values[LEGACY_COMPENSATION_RATE_KEY]
+        offset = values[LEGACY_COMPENSATION_OFFSET_KEY]
+
+        if (rate, offset) == (1.0, 0.0):
+            return
+
+        expression = f"{rate}*x + {offset}"
+        self.heater_compensation_expression = expression
+
+        logger.info(
+            f"Migrated heater compensation rate {rate} / offset {offset} to "
+            f"{expression}"
+        )
 
 
 def compensate_setpoint(base_setpoint, expression):

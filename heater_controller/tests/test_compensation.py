@@ -111,3 +111,51 @@ def test_an_out_of_range_result_is_clamped_with_a_warning(
     warning = next(r for r in caplog.records if r.levelname == "WARNING")
     assert compensated in warning.getMessage()
     assert str(clamped) in warning.getMessage()
+
+
+PATH = "microdrop.peripheral_settings"
+
+
+def _legacy(node, **values):
+    for key, value in values.items():
+        node.set(f"{PATH}.heater_compensation_{key}", value)
+
+
+def test_old_rate_and_offset_seed_the_expression(node):
+    _legacy(node, rate="1.02", offset="0.5")
+    preferences = HeaterCompensationPreferences()
+    assert preferences.heater_compensation_expression == "1.02*x + 0.5"
+    assert node.get(f"{PATH}.heater_compensation_expression") == "1.02*x + 0.5"
+
+
+def test_an_offset_alone_seeds_with_the_default_rate(node):
+    _legacy(node, offset="-1.5")
+    assert HeaterCompensationPreferences().heater_compensation_expression == (
+        "1.0*x + -1.5"
+    )
+
+
+def test_identity_rate_and_offset_seed_nothing(node):
+    _legacy(node, rate="1.0", offset="0.0")
+    assert HeaterCompensationPreferences().heater_compensation_expression == "x"
+    assert "heater_compensation_expression" not in node.keys(PATH)
+
+
+def test_an_existing_expression_is_never_overwritten(node):
+    _legacy(node, rate="1.02", offset="0.5")
+    node.set(f"{PATH}.heater_compensation_expression", "x^2/100 + x")
+    assert HeaterCompensationPreferences().heater_compensation_expression == (
+        "x^2/100 + x"
+    )
+
+
+def test_an_unreadable_legacy_value_is_skipped_with_a_warning(node, caplog):
+    _legacy(node, rate="abc")
+    assert HeaterCompensationPreferences().heater_compensation_expression == "x"
+    assert "abc" in caplog.text
+
+
+def test_a_migrated_preference_compensates_like_the_old_one(node):
+    _legacy(node, rate="1.02", offset="0.5")
+    node.set(f"{PATH}.heater_use_compensation", "True")
+    assert compensate_setpoint_from_preferences(50.0) == round(50.0 * 1.02 + 0.5, 2)

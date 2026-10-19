@@ -46,6 +46,11 @@ DEFAULT_HEATER = "tec1"
 # compensated setpoint is clamped to (see compensation.py).
 TEMPERATURE_MIN, TEMPERATURE_MAX = 0, 150
 
+# Peripheral-settings keys of the linear compensation (setpoint * rate +
+# offset) the expression replaced; read once to seed the expression.
+LEGACY_COMPENSATION_RATE_KEY = "heater_compensation_rate"
+LEGACY_COMPENSATION_OFFSET_KEY = "heater_compensation_offset"
+
 # Delay between stopping the board's current run mode and starting the next
 # one (legacy standalone UI's COMMAND_DELAY_SHORT): the firmware task needs
 # time to wind down before a new pid/stream task starts cleanly.
