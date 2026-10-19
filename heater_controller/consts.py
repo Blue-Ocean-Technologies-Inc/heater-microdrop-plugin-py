@@ -46,14 +46,6 @@ DEFAULT_HEATER = "tec1"
 # compensated setpoint is clamped to (see compensation.py).
 TEMPERATURE_MIN, TEMPERATURE_MAX = 0, 150
 
-# Temperature-compensation defaults + spinner ranges (ports of the legacy
-# standalone UI's compensation controls): the compensated PID setpoint is
-# round(base * rate + offset, 2). See heater_controller/compensation.py.
-DEFAULT_COMPENSATION_RATE = 1.0
-DEFAULT_COMPENSATION_OFFSET = 0.0
-COMPENSATION_RATE_MIN, COMPENSATION_RATE_MAX = -10.0, 10.0
-COMPENSATION_OFFSET_MIN, COMPENSATION_OFFSET_MAX = -100.0, 100.0
-
 # Delay between stopping the board's current run mode and starting the next
 # one (legacy standalone UI's COMMAND_DELAY_SHORT): the firmware task needs
 # time to wind down before a new pid/stream task starts cleanly.

@@ -21,8 +21,8 @@ magnet plugin's shared Peripheral Settings pane).
 
 # Enthought library imports.
 from envisage.ui.tasks.api import PreferencesCategory, PreferencesPane
-from traits.api import Bool, Directory
-from traitsui.api import Group, Item, View
+from traits.api import Bool, Directory, Property, Str
+from traitsui.api import Group, Item, UItem, View
 
 # Microdrop package imports.
 from heater_controller.compensation import HeaterCompensationPreferences
@@ -32,6 +32,7 @@ from microdrop_application.menus import is_advanced_mode
 from microdrop_style.text_styles import preferences_group_style_sheet
 
 # Microdrop utils imports.
+from microdrop_utils.expression import function_error
 from microdrop_utils.preferences_UI_helpers import create_item_label_group
 
 
@@ -55,8 +56,17 @@ class HeaterPreferences(HeaterCompensationPreferences):
     # creation is enough to show/hide the Advanced group below.
     advanced_mode_ = Bool()
 
+    #: Why the compensation expression cannot be used, "" while it can —
+    #: shown under the field (trailing underscore => never persisted).
+    heater_compensation_expression_error_ = Property(
+        Str, observe="heater_compensation_expression"
+    )
+
     def _advanced_mode__default(self):
         return is_advanced_mode()
+
+    def _get_heater_compensation_expression_error_(self):
+        return function_error(self.heater_compensation_expression)
 
 
 heater_tab = PreferencesCategory(
@@ -92,19 +102,24 @@ class HeaterPreferencesPane(PreferencesPane):
     advanced_group = Group(
         create_item_label_group(
             "heater_use_compensation",
-            label_text="Use compensation (setpoint sent = base × rate + offset)",
+            label_text="Use compensation (setpoint sent = f(base))",
             orientation="horizontal",
             label_position="last",
         ),
         Item(
-            "heater_compensation_rate",
-            label="Compensation rate",
+            "heater_compensation_expression",
+            label="Compensation: actual = f(expected)",
+            tooltip="Written as actual = f(expected), the Actual vs expected "
+            "trend: x (or expected) is the base setpoint you type or the "
+            "protocol step's target, and the result is the setpoint sent to "
+            "the board. Example: 1.04*x^2/100 + 0.9*x + 1.2. An expression "
+            "that does not parse sends the base setpoint unchanged.",
             enabled_when="heater_use_compensation",
         ),
-        Item(
-            "heater_compensation_offset",
-            label="Compensation offset (°C)",
-            enabled_when="heater_use_compensation",
+        UItem(
+            "heater_compensation_expression_error_",
+            style="readonly",
+            visible_when="heater_compensation_expression_error_",
         ),
         label="Advanced",
         show_border=True,
