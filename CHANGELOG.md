@@ -1,3 +1,14 @@
+## [v1.12.0](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.12.0) (2026-10-21)
+
+### Feat
+
+- **compensation**: migrate the linear rate/offset preference ([`010b1b5`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/010b1b5055b0e267e52e48fff08dc0c12fd4773e))
+- **compensation**: compensate setpoints with actual = f(expected) ([`dfda15c`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/dfda15cbb4da4ef654571c23508bbdffab5261ff))
+
+### Refactor
+
+- **consts**: move the setpoint range to heater_controller ([`2f74093`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/2f740933b92e71b25055c0a639fe420657d39e3c))
+
 ## [v1.11.1](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.11.1) (2026-10-09)
 
 ### Fix
