@@ -25,6 +25,7 @@ import pytest
 
 # Microdrop package imports.
 import heater_controls_ui.controller as controller_mod
+import template_status_and_controls.base_message_handler as base_handler_mod
 from heater_controller.consts import (
     SET_PWM,
     SET_TEMPERATURE,
@@ -32,6 +33,7 @@ from heater_controller.consts import (
     STOP_STREAM,
 )
 from heater_controls_ui.controller import HeaterControlsController
+from heater_controls_ui.message_handler import HeaterMessageHandler
 from heater_controls_ui.model import HeaterStatusModel
 
 
@@ -175,6 +177,33 @@ def test_board_sync_does_not_republish(published):
 
     model.temperature = 50  # subsequent USER edits still publish
     assert (SET_TEMPERATURE, {"temperature": 50, "sensor_group": "all"}) in published
+
+
+def test_backend_stream_state_mirrors_toggle_without_republish(published, monkeypatch):
+    """A stream the protocol starts/stops (STREAM_STATE) flips the pane's
+    toggle, and the echo guard keeps START_STREAM / STOP_STREAM from going
+    back out."""
+    monkeypatch.setattr(
+        base_handler_mod,
+        "generate_class_method_dramatiq_listener_actor",
+        lambda listener_name, class_method: None,
+    )
+    controller, model = _controller()
+    handler = HeaterMessageHandler(model=model, name="test_heater_listener")
+
+    handler._on_stream_state_triggered('{"active": true}')
+    assert model.stream_active is True
+    assert model.updating_from_board is False
+
+    handler._on_stream_state_triggered('{"active": false}')
+    assert model.stream_active is False
+    assert published == []
+
+    handler._on_stream_state_triggered("not json")  # logged, ignored
+    assert model.stream_active is False
+
+    model.stream_active = True  # subsequent USER toggles still publish
+    assert published[0][0] == START_STREAM
 
 
 # --- sensor group (legacy dropdown) -------------------------------------------

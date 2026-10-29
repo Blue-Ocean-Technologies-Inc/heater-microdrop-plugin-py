@@ -76,11 +76,25 @@ class StartStreamData(_HeaterCommand):
         return self
 
 
+class EnsureStreamData(_HeaterCommand):
+    """Protocol start: plain telemetry streaming (``stream_<group>`` or
+    ``stream_all``) only when the board is not streaming already."""
+
+    sensor_group: Optional[str] = None
+
+
 class StopStreamData(_HeaterCommand):
     """Legacy stop_stream(): stop whichever run mode is active; optionally turn
     every output off afterwards (safety on UI stream-off)."""
 
     all_off: bool = False
+
+
+class StreamStateData(BaseModel):
+    """STREAM_STATE signal: whether the board now streams telemetry."""
+
+    model_config = ConfigDict(extra="forbid")
+    active: bool
 
 
 class SetStreamData(BaseModel):

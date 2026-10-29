@@ -6,7 +6,8 @@
 MicroDrop heater plugin, packaged as an installable conda package:
 
 - `heater_controller/` — backend board driver (telemetry, PID/PWM commands,
-  sensor/heater config ops, protocol set-temperature with reached ack).
+  sensor/heater config ops, protocol set-temperature with reached ack, telemetry
+  stream ensured at protocol start).
 - `heater_controls_ui/` — status/controls dock pane, live temperature/PWM
   plotting pane, Configure Sensors & Heaters dialog, status-bar icon.
 - `heater_protocol_controls/` — heater temperature protocol column.
