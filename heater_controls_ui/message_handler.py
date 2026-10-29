@@ -11,6 +11,9 @@
 # Standard library imports.
 import json
 
+# Third-party imports.
+from pydantic import ValidationError
+
 # Enthought library imports.
 from traits.api import Instance
 
@@ -21,6 +24,7 @@ from heater_controller.consts import (
     FIRMWARE_UPLOAD_LOG,
     FIRMWARE_UPLOAD_STARTED,
 )
+from heater_controller.datamodels import StreamStateData
 from template_status_and_controls.base_message_handler import BaseMessageHandler
 
 # Local imports.
@@ -207,6 +211,30 @@ class HeaterMessageHandler(BaseMessageHandler):
             self._sync_pid_from_board(False)
         else:
             logger.debug(f"Heater INFO event: {data}")
+
+    def _on_stream_state_triggered(self, body):
+        """Backend stream on/off change (STREAM_STATE) -> the stream toggle,
+        including streams the protocol starts (ensure / steps) and stops (run
+        end). Set under ``updating_from_board`` so the controller does not
+        publish START_STREAM / STOP_STREAM back. Accepted trade-off: while a
+        protocol run streams, the pane treats the stream as live, so setpoint
+        edits go straight to the board."""
+        try:
+            active = StreamStateData.model_validate_json(body).active
+        except ValidationError as e:
+            logger.error(f"Invalid stream_state payload {body!r}: {e}")
+            return
+
+        if self.model.stream_active == active:
+            return
+
+        self.model.updating_from_board = True
+        try:
+            self.model.stream_active = active
+        finally:
+            self.model.updating_from_board = False
+
+        logger.info(f"Heater UI: backend reports stream {'on' if active else 'off'}")
 
     def _sync_pid_from_board(self, enabled):
         """Reflect the board-reported PID state into the model WITHOUT

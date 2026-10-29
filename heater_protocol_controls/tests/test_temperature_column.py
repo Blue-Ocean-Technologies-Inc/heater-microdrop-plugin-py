@@ -19,6 +19,7 @@ import pytest
 # Microdrop package imports.
 import heater_protocol_controls.protocol_columns.temperature_column as tc_mod
 from heater_controller.consts import (
+    ENSURE_STREAM,
     PROTOCOL_SET_TEMPERATURE,
     TELEMETRY,
     TEMPERATURE_REACHED,
@@ -141,6 +142,30 @@ def test_on_step_publishes_and_waits(monkeypatch):
         "tolerance": 1.5,
     }
     assert ctx.waited == (TEMPERATURE_REACHED, 30.0)
+
+
+def test_pre_protocol_start_ensures_stream(monkeypatch):
+    pub = []
+    monkeypatch.setattr(
+        tc_mod, "publish_message", lambda topic, message: pub.append((topic, message))
+    )
+
+    TemperatureHandler().on_pre_protocol_start(type("C", (), {"preview_mode": False})())
+
+    assert [(topic, json.loads(payload)) for topic, payload in pub] == [
+        (ENSURE_STREAM, {"heater": "tec1", "sensor_group": None})
+    ]
+
+
+def test_pre_protocol_start_skips_in_preview(monkeypatch):
+    pub = []
+    monkeypatch.setattr(
+        tc_mod, "publish_message", lambda topic, message: pub.append((topic, message))
+    )
+
+    TemperatureHandler().on_pre_protocol_start(type("C", (), {"preview_mode": True})())
+
+    assert pub == []
 
 
 def test_preview_mode_skips(monkeypatch):

@@ -12,12 +12,16 @@
 import time
 
 # Enthought library imports.
-from traits.api import Bool, HasTraits, Instance, provides
+from traits.api import Bool, HasTraits, Instance, observe, provides
+
+# Microdrop utils imports.
+from microdrop_utils.dramatiq_pub_sub_helpers import publish_message
 
 # Local imports.
-from ..consts import COMMAND_DELAY_SHORT
+from ..consts import COMMAND_DELAY_SHORT, STREAM_STATE
 from ..data_logger import current_heater_logs_directory, heater_data_logger
 from ..datamodels import (
+    EnsureStreamData,
     ProtocolSetTemperatureData,
     SetFanData,
     SetPidModeData,
@@ -26,6 +30,7 @@ from ..datamodels import (
     SetTemperatureData,
     StartStreamData,
     StopStreamData,
+    StreamStateData,
 )
 from ..heater_serial_proxy import HeaterSerialProxy
 from ..interfaces.i_heater_control_mixin_service import IHeaterControlMixinService
@@ -59,6 +64,13 @@ class HeaterCommandSetterService(HasTraits):
     #: legacy standalone UI's ``pid_active``, so the stop half of a transition
     #: knows whether to send ``pid_stop`` or ``stream_stop``.
     _pid_active = Bool(False)
+
+    #: True while the board streams telemetry (plain or PID-coupled), so the
+    #: protocol-start ensure leaves a running stream alone. Tracked here
+    #: because ``heater_data_logger.armed`` stays False for a stream running
+    #: unlogged (no experiment directory). Every change is published on
+    #: STREAM_STATE (``_publish_stream_state``).
+    _stream_active = Bool(False)
 
     # ------------------------------------------------------------------
     # Generic raw command
@@ -106,6 +118,7 @@ class HeaterCommandSetterService(HasTraits):
         else:
             cmd = f"stream_{data.group}"
         self._send(cmd)
+        self._stream_active = data.group != "stop"
 
     def on_set_fan_request(self, message):
         data = self._parse(SetFanData, message)
@@ -115,6 +128,7 @@ class HeaterCommandSetterService(HasTraits):
 
     def on_all_off_request(self, message):
         self._send("all_off")
+        self._stream_active = False
         heater_data_logger.stop()
 
     # ------------------------------------------------------------------
@@ -149,6 +163,25 @@ class HeaterCommandSetterService(HasTraits):
             if data.pwm is not None:
                 # Re-assert the staged open-loop duty on the fresh stream.
                 self._send(f"pwm_{data.heater}_{data.pwm}")
+
+        self._stream_active = True
+        self._start_data_log()
+
+    def on_ensure_stream_request(self, message):
+        """Protocol start: start plain telemetry streaming unless the board
+        already streams. No stop/delay transition and no PID change — an
+        operator's running stream (and its PID mode) keeps going untouched."""
+        data = self._parse(EnsureStreamData, message)
+        if data is None:
+            return
+
+        if self._stream_active:
+            logger.info("Heater already streaming; protocol start leaves it running")
+
+            return
+
+        self._send(f"stream_{data.sensor_group}" if data.sensor_group else "stream_all")
+        self._stream_active = True
         self._start_data_log()
 
     def on_stop_stream_request(self, message):
@@ -157,6 +190,7 @@ class HeaterCommandSetterService(HasTraits):
             return
         self._send("pid_stop" if self._pid_active else "stream_stop")
         self._pid_active = False
+        self._stream_active = False
         if data.all_off:
             self._send("all_off")
         # stop() (not suspend) ends the run: it disarms under the logger's
@@ -187,8 +221,24 @@ class HeaterCommandSetterService(HasTraits):
         self._send(f"pid_{heater}_{data.temperature}")
         self._send("stream_all")
         self._pid_active = True
+        self._stream_active = True
         self.proxy.set_temperature_target(heater, data.temperature, data.tolerance)
         self._start_data_log()
+
+    # ------------------------------------------------------------------
+    # Stream state mirror
+    # ------------------------------------------------------------------
+    @observe("_stream_active")
+    def _publish_stream_state(self, event):
+        """Announce every stream on/off change on STREAM_STATE, so the
+        controls pane's stream toggle follows streams it did not start
+        (protocol ensure / steps) and stops (protocol end). Accepted
+        trade-off: while a protocol run streams, the pane treats the stream
+        as live, so the operator's setpoint edits go straight to the board."""
+        publish_message(
+            topic=STREAM_STATE,
+            message=StreamStateData(active=event.new).model_dump_json(),
+        )
 
     # ------------------------------------------------------------------
     # Helpers

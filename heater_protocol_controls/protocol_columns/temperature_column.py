@@ -19,6 +19,10 @@ framework):
   * target_temperature_c (Float) — the PID setpoint to drive toward
   * tolerance_c          (Float) — the +/- band that counts as "reached"
 
+At protocol start the handler publishes ENSURE_STREAM, so telemetry streams
+for the whole run without restarting a stream already on; the end of the run
+stops it (STOP_STREAM with all_off).
+
 For a checked step the handler publishes PROTOCOL_SET_TEMPERATURE; the heater
 backend sets the target, watches the PID telemetry, and acks on
 TEMPERATURE_REACHED once within tolerance — which the step's ``ctx.wait_for``
@@ -37,11 +41,13 @@ from traits.api import Bool, Float, List, Str
 from heater_controller.compensation import compensate_setpoint_from_preferences
 from heater_controller.consts import (
     DEFAULT_HEATER,
+    ENSURE_STREAM,
     PROTOCOL_SET_TEMPERATURE,
     STOP_STREAM,
     TELEMETRY,
     TEMPERATURE_REACHED,
 )
+from heater_controller.datamodels import EnsureStreamData
 from pluggable_protocol_tree.interfaces.i_compound_column import FieldSpec
 from pluggable_protocol_tree.models.compound_column import (
     BaseCompoundColumnHandler,
@@ -176,6 +182,23 @@ class TemperatureHandler(BaseCompoundColumnHandler):
     # Heating/cooling to a setpoint is slow, so default the ack-wait higher than
     # voltage/frequency (5 s) or magnet (10 s).
     default_ack_time_s = 120.0
+
+    def on_pre_protocol_start(self, ctx):
+        """Make sure the board streams telemetry for the whole run, so the
+        heater is logged and plotted from the first step. ENSURE_STREAM rather
+        than START_STREAM: a stream the operator already has running must not
+        be stopped and restarted (START_STREAM's stop -> delay -> start
+        transition). ``on_post_protocol_end`` turns it off again. The backend
+        announces the stream on STREAM_STATE, so the controls pane shows it as
+        on during the run — and treats it as live, so setpoint edits made
+        there mid-run go straight to the board (accepted trade-off)."""
+        if getattr(ctx, "preview_mode", False):
+            return
+
+        publish_message(
+            topic=ENSURE_STREAM,
+            message=EnsureStreamData(heater=DEFAULT_HEATER).model_dump_json(),
+        )
 
     def on_step(self, row, ctx):
         if getattr(ctx.protocol, "preview_mode", False):

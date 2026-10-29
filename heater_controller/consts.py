@@ -98,6 +98,10 @@ CONFIG_PUSHED = f"{DEVICE_NAME}/signals/config_pushed"
 TEMPERATURE_REACHED = f"{DEVICE_NAME}/signals/temperature_reached"
 # Board identity from the connect-time whoami probe: JSON {"device_id", "uid", ...}.
 BOARD_ID = f"{DEVICE_NAME}/signals/board_id"
+# The backend's stream on/off state changed — whichever request caused it
+# (controls pane, protocol ensure/step/end). Payload StreamStateData
+# {"active": bool}; the controls pane mirrors it into its stream toggle.
+STREAM_STATE = f"{DEVICE_NAME}/signals/stream_state"
 
 # Firmware upload: the shared PeripheralFirmwareUploadService owns the run and
 # the shared dialog renders the signals below. Topic strings come from the
@@ -134,6 +138,10 @@ SET_STREAM = f"{DEVICE_NAME}/requests/set_stream"
 # guarantee.
 START_STREAM = f"{DEVICE_NAME}/requests/start_stream"
 STOP_STREAM = f"{DEVICE_NAME}/requests/stop_stream"
+# Protocol start: start plain telemetry streaming unless the board already
+# streams — unlike START_STREAM, a running stream (and its PID mode) is left
+# untouched rather than stopped and restarted.
+ENSURE_STREAM = f"{DEVICE_NAME}/requests/ensure_stream"
 SET_FAN = f"{DEVICE_NAME}/requests/set_fan"
 ALL_OFF = f"{DEVICE_NAME}/requests/all_off"
 

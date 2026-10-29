@@ -15,9 +15,14 @@ The whole stop-current -> delay -> start-new sequence must run inside one
 handler invocation, in order — that ordering is the reason these exist as
 single requests rather than separate pub/sub messages. ``time.sleep`` is
 monkeypatched so the tests record the delay without waiting for it.
+
+The protocol-start ensure_stream is the transition's opposite: it starts a
+plain stream only from idle and never stops or restarts a running one.
+Every stream on/off change is announced on STREAM_STATE.
 """
 
 # Standard library imports.
+import json
 import threading
 
 # Third-party imports.
@@ -25,6 +30,7 @@ import pytest
 
 # Microdrop package imports.
 import heater_controller.services.heater_command_setter_service as svc_mod
+from heater_controller.consts import STREAM_STATE
 from heater_controller.heater_serial_proxy import HeaterSerialProxy
 from heater_controller.services.heater_command_setter_service import (
     HeaterCommandSetterService,
@@ -85,3 +91,108 @@ def test_stop_stream_branches_on_pid_active(service):
 def test_start_stream_pid_requires_temperature(service):
     service.on_start_stream_request(_Msg('{"pid": true}'))
     assert service.proxy.sent == []  # invalid payload rejected, no commands
+
+
+# --- protocol-start ensure_stream (start only when not streaming) ------------
+
+
+def test_ensure_stream_from_idle_starts_plain_stream(service):
+    service.on_ensure_stream_request(_Msg('{"heater": "tec1"}'))
+    # No stop -> delay transition and no PID change: just the plain stream.
+    assert service.proxy.sent == ["stream_all"]
+    assert service._stream_active is True
+    assert service._pid_active is False
+
+
+def test_ensure_stream_honours_sensor_group(service):
+    service.on_ensure_stream_request(_Msg('{"sensor_group": "thermistors"}'))
+    assert service.proxy.sent == ["stream_thermistors"]
+
+
+@pytest.mark.parametrize(
+    "start",
+    [
+        lambda s: s.on_start_stream_request(_Msg('{"pid": false}')),
+        lambda s: s.on_start_stream_request(_Msg('{"pid": true, "temperature": 40}')),
+        lambda s: s.on_protocol_set_temperature_request(
+            _Msg('{"temperature": 60, "tolerance": 2}')
+        ),
+    ],
+    ids=["plain_stream", "pid_stream", "protocol_pid_stream"],
+)
+def test_ensure_stream_leaves_running_stream_alone(service, start):
+    service.proxy.available_heaters = []
+    service.proxy.set_temperature_target = lambda heater, target, tolerance: None
+
+    start(service)
+    pid_active = service._pid_active
+    service.proxy.sent.clear()
+
+    service.on_ensure_stream_request(_Msg('{"heater": "tec1"}'))
+
+    assert service.proxy.sent == []
+    assert service._stream_active is True
+    assert service._pid_active is pid_active
+
+
+def test_ensure_stream_after_stop_starts_again(service):
+    service.on_start_stream_request(_Msg('{"pid": false}'))
+    service.on_stop_stream_request(_Msg('{"all_off": true}'))
+    service.proxy.sent.clear()
+
+    service.on_ensure_stream_request(_Msg('{"heater": "tec1"}'))
+
+    assert service.proxy.sent == ["stream_all"]
+    assert service._stream_active is True
+
+
+def test_ensure_stream_after_all_off_starts_again(service):
+    service.on_ensure_stream_request(_Msg('{"heater": "tec1"}'))
+    service.on_all_off_request(_Msg(""))
+    service.proxy.sent.clear()
+
+    service.on_ensure_stream_request(_Msg('{"heater": "tec1"}'))
+
+    assert service.proxy.sent == ["stream_all"]
+
+
+# --- STREAM_STATE: one publish per on/off change -----------------------------
+
+
+def test_stream_state_published_on_each_change(service, stream_state_published):
+    service.proxy.available_heaters = []
+    service.proxy.set_temperature_target = lambda heater, target, tolerance: None
+
+    def states():
+        published = [
+            (topic, json.loads(message)["active"])
+            for topic, message in stream_state_published
+        ]
+        stream_state_published.clear()
+
+        return published
+
+    service.on_ensure_stream_request(_Msg("{}"))
+    service.on_ensure_stream_request(_Msg("{}"))  # already on: no change
+    assert states() == [(STREAM_STATE, True)]
+
+    service.on_stop_stream_request(_Msg('{"all_off": true}'))
+    assert states() == [(STREAM_STATE, False)]
+
+    service.on_start_stream_request(_Msg('{"pid": true, "temperature": 40}'))
+    service.on_start_stream_request(_Msg('{"pid": false}'))  # restart: still on
+    assert states() == [(STREAM_STATE, True)]
+
+    service.on_all_off_request(_Msg(""))
+    assert states() == [(STREAM_STATE, False)]
+
+    service.on_protocol_set_temperature_request(
+        _Msg('{"temperature": 60, "tolerance": 2}')
+    )
+    assert states() == [(STREAM_STATE, True)]
+
+    service.on_set_stream_request(_Msg('{"group": "stop"}'))
+    assert states() == [(STREAM_STATE, False)]
+
+    service.on_set_stream_request(_Msg('{"group": "thermistors"}'))
+    assert states() == [(STREAM_STATE, True)]
