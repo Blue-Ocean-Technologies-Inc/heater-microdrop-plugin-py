@@ -1,3 +1,9 @@
+## [v1.13.0](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.13.0) (2026-10-29)
+
+### Feat
+
+- **protocol**: ensure the telemetry stream at protocol start ([`8c91f53`](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/commit/8c91f53e548d52df19c5d0691fb842af8d83a7d7))
+
 ## [v1.12.0](https://github.com/Blue-Ocean-Technologies-Inc/heater-microdrop-plugin-py/releases/tag/v1.12.0) (2026-10-21)
 
 ### Feat
